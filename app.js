@@ -516,7 +516,126 @@ async function restoreReward(id) {
   saveState();
   renderAll();
 }
-function renderSettings() {}
+// ===== 設定 =====
+function renderSettings() {
+  const locked = !parentUnlocked;
+  document.getElementById("settings-locked").hidden = !locked;
+  document.getElementById("settings-content").hidden = locked;
+  if (locked) return;
+  document.getElementById("child-name").value = state.settings.childName;
+  renderPointHistory();
+}
+
+async function unlockSettings() {
+  if (!(await requireParent())) return;
+  renderSettings();
+}
+
+function renderPointHistory() {
+  const container = document.getElementById("point-history");
+  container.innerHTML = "";
+  if (state.pointHistory.length === 0) {
+    container.innerHTML = '<p class="empty">履歴がありません</p>';
+    return;
+  }
+  const typeLabel = { task: "タスク", exchange: "交換", adjustment: "調整" };
+  for (const h of [...state.pointHistory].reverse()) {
+    const div = document.createElement("div");
+    div.className = "list-item";
+    const sign = h.amount >= 0 ? "+" : "";
+    div.innerHTML =
+      `<div class="item-main">` +
+      `<div class="item-title">${escapeHtml(h.title)} ` +
+      `<span class="${h.amount >= 0 ? "plus" : "minus"}">${sign}${h.amount}pt</span></div>` +
+      `<div class="item-sub">${h.date} ・ ${typeLabel[h.type] ?? h.type}` +
+      `${h.note ? " ・ " + escapeHtml(h.note) : ""}</div></div>`;
+    container.append(div);
+  }
+}
+
+function saveChildName() {
+  state.settings.childName = document.getElementById("child-name").value.trim();
+  saveState();
+  alert("保存しました");
+}
+
+function adjustPoints() {
+  const amount = Number(document.getElementById("adjust-amount").value);
+  const note = document.getElementById("adjust-note").value.trim();
+  if (!amount) { alert("ポイント数を入力してください"); return; }
+  if (!note) { alert("理由を入力してください"); return; }
+  addHistory({ type: "adjustment", amount, title: "手動調整", note });
+  saveState();
+  renderAll();
+  document.getElementById("adjust-amount").value = "";
+  document.getElementById("adjust-note").value = "";
+}
+
+// ===== バックアップ（設計書 §6） =====
+function exportData() {
+  const envelope = { appName: "kids-point-app", exportedAt: nowISO(), data: state };
+  const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `kids-point-app-backup-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function validateImport(obj) {
+  if (!obj || obj.appName !== "kids-point-app") return "このアプリのバックアップではありません";
+  const d = obj.data;
+  if (!d || d.version !== 1) return "対応していないバージョンです";
+  for (const key of ["settings", "points", "tasks", "rewards", "pointHistory"]) {
+    if (!(key in d)) return `必須項目 ${key} がありません`;
+  }
+  if (!Array.isArray(d.tasks) || !Array.isArray(d.rewards) || !Array.isArray(d.pointHistory)) {
+    return "データ形式が不正です";
+  }
+  return null;
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let obj;
+    try {
+      obj = JSON.parse(reader.result);
+    } catch {
+      alert("JSONとして読み込めませんでした");
+      return;
+    }
+    const error = validateImport(obj);
+    if (error) { alert("読み込めません: " + error); return; }
+    const d = obj.data;
+    const summary = [
+      `子どもの名前: ${d.settings.childName || "（未設定）"}`,
+      `ポイント残高: ${d.pointHistory.reduce((s, h) => s + h.amount, 0)}pt`,
+      `タスク数: ${d.tasks.length}`,
+      `ごほうび数: ${d.rewards.length}`,
+      `履歴件数: ${d.pointHistory.length}`,
+      `バックアップ日時: ${obj.exportedAt}`,
+    ].join("\n");
+    if (!confirm(`このデータを読み込みますか？現在のデータは上書きされます。\n\n${summary}`)) return;
+    // 誤ファイル対策: 現在データを一時バックアップしてから上書き
+    localStorage.setItem(STORAGE_KEY + "-backup-before-import", localStorage.getItem(STORAGE_KEY) ?? "");
+    state = d;
+    recalcPoints();
+    saveState();
+    renderAll();
+    alert("読み込みました");
+  };
+  reader.readAsText(file);
+}
+
+function resetAll() {
+  if (!confirm("全データを初期化します。よろしいですか？")) return;
+  if (!confirm("本当に初期化しますか？この操作は取り消せません。")) return;
+  state = defaultState();
+  parentUnlocked = false;
+  saveState();
+  switchTab("home");
+}
 
 // ===== イベント登録 =====
 function setupEvents() {
@@ -543,6 +662,20 @@ function setupEvents() {
   document.querySelectorAll('input[name="reward-view"]').forEach((r) => {
     r.addEventListener("change", renderRewards);
   });
+  // 設定
+  document.getElementById("btn-unlock-settings").addEventListener("click", unlockSettings);
+  document.getElementById("btn-save-name").addEventListener("click", saveChildName);
+  document.getElementById("btn-change-pin").addEventListener("click", changePin);
+  document.getElementById("btn-adjust").addEventListener("click", adjustPoints);
+  document.getElementById("btn-export").addEventListener("click", exportData);
+  document.getElementById("btn-import").addEventListener("click", () => {
+    document.getElementById("import-file").click();
+  });
+  document.getElementById("import-file").addEventListener("change", (e) => {
+    if (e.target.files[0]) importData(e.target.files[0]);
+    e.target.value = "";
+  });
+  document.getElementById("btn-reset").addEventListener("click", resetAll);
 }
 
 // ===== 初期化 =====
