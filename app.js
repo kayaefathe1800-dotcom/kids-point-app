@@ -99,12 +99,43 @@ function saveState() {
   }
 }
 
+// ===== タブ切り替え =====
+function switchTab(name) {
+  parentUnlocked = false; // タブ移動で親ロックに戻す（設計書 §5）
+  document.querySelectorAll(".tab").forEach((s) => s.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  document.querySelectorAll("#bottom-nav button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === name);
+  });
+  renderAll();
+}
+
+// ===== 描画ディスパッチ（各renderは後続タスクで実装） =====
+function renderAll() {
+  renderHome();
+  renderTasks();
+  renderRewards();
+  renderSettings();
+}
+function renderHome() {}
+function renderTasks() {}
+function renderRewards() {}
+function renderSettings() {}
+
+// ===== イベント登録 =====
+function setupEvents() {
+  document.querySelectorAll("#bottom-nav button").forEach((b) => {
+    b.addEventListener("click", () => switchTab(b.dataset.tab));
+  });
+}
+
 // ===== 初期化 =====
 function init() {
   loadState();
   state.settings.lastOpenedDate = todayStr();
   saveState();
-  console.log("state:", state);
+  setupEvents();
+  renderAll();
 }
 
 document.addEventListener("DOMContentLoaded", init);
