@@ -269,7 +269,133 @@ function renderNextRewardHint() {
   const nearest = unaffordable.reduce((a, b) => (a.cost <= b.cost ? a : b));
   el.textContent = `あと ${nearest.cost - state.points}pt で「${nearest.title}」と交換できる`;
 }
-function renderTasks() {}
+// ===== タスク管理 =====
+function describeRecurrence(task) {
+  if (task.type === "oneoff") return task.dueDate ? `期限 ${task.dueDate}` : "単発";
+  if (task.recurrence.frequency === "daily") return "毎日";
+  const names = ["日", "月", "火", "水", "木", "金", "土"];
+  return "毎週 " + task.recurrence.weekdays.map((d) => names[d]).join("・");
+}
+
+function smallButton(label, onClick) {
+  const b = document.createElement("button");
+  b.className = "btn-small";
+  b.textContent = label;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function renderTasks() {
+  const view = document.querySelector('input[name="task-view"]:checked').value;
+  const rec = document.getElementById("recurring-tasks");
+  const one = document.getElementById("oneoff-tasks");
+  rec.innerHTML = "";
+  one.innerHTML = "";
+  for (const task of state.tasks) {
+    const archived = task.status === "archived";
+    if (view === "active" ? archived : !archived) continue;
+    const item = document.createElement("div");
+    item.className = "list-item";
+    const main = document.createElement("div");
+    main.className = "item-main";
+    main.innerHTML =
+      `<div class="item-title">${escapeHtml(task.title)}${task.status === "completed" ? "（完了）" : ""}</div>` +
+      `<div class="item-sub">${task.points}pt ・ ${describeRecurrence(task)} ・ 完了${task.completions.length}回</div>`;
+    item.append(main);
+    const buttons = document.createElement("div");
+    if (view === "active") {
+      buttons.append(smallButton("編集", () => openTaskDialog(task.id)));
+      buttons.append(smallButton("アーカイブ", () => archiveTask(task.id)));
+    } else {
+      buttons.append(smallButton("復元", () => restoreTask(task.id)));
+    }
+    item.append(buttons);
+    (task.type === "recurring" ? rec : one).append(item);
+  }
+  if (!rec.children.length) rec.innerHTML = '<p class="empty">なし</p>';
+  if (!one.children.length) one.innerHTML = '<p class="empty">なし</p>';
+}
+
+async function openTaskDialog(taskId = null) {
+  if (!(await requireParent())) return; // 追加・編集は親PIN必須（設計書 §4）
+  const task = taskId ? state.tasks.find((t) => t.id === taskId) : null;
+  document.getElementById("task-dialog-title").textContent = task ? "タスクを編集" : "タスクを追加";
+  document.getElementById("task-id").value = task ? task.id : "";
+  document.getElementById("task-title").value = task ? task.title : "";
+  document.getElementById("task-points").value = task ? task.points : 10;
+  document.getElementById("task-type").value = task ? task.type : "recurring";
+  document.getElementById("task-frequency").value =
+    task && task.type === "recurring" ? task.recurrence.frequency : "daily";
+  document.querySelectorAll(".weekday-cb").forEach((cb) => {
+    cb.checked = !!(task && task.type === "recurring" &&
+      task.recurrence.weekdays.includes(Number(cb.value)));
+  });
+  document.getElementById("task-duedate").value =
+    task && task.dueDate ? task.dueDate : todayStr();
+  updateTaskFormVisibility();
+  document.getElementById("task-dialog").showModal();
+}
+
+function updateTaskFormVisibility() {
+  const type = document.getElementById("task-type").value;
+  const freq = document.getElementById("task-frequency").value;
+  document.getElementById("recurrence-fields").hidden = type !== "recurring";
+  document.getElementById("oneoff-fields").hidden = type !== "oneoff";
+  document.getElementById("weekday-fields").hidden = type !== "recurring" || freq !== "weekly";
+}
+
+function saveTaskFromForm(e) {
+  e.preventDefault();
+  const id = document.getElementById("task-id").value;
+  const type = document.getElementById("task-type").value;
+  const freq = document.getElementById("task-frequency").value;
+  const weekdays = [...document.querySelectorAll(".weekday-cb:checked")].map((cb) => Number(cb.value));
+  if (type === "recurring" && freq === "weekly" && weekdays.length === 0) {
+    alert("曜日を1つ以上選んでください");
+    return;
+  }
+  const fields = {
+    title: document.getElementById("task-title").value.trim(),
+    points: Number(document.getElementById("task-points").value),
+    type,
+    recurrence: type === "recurring"
+      ? { frequency: freq, weekdays: freq === "weekly" ? weekdays : [] }
+      : null,
+    dueDate: type === "oneoff" ? document.getElementById("task-duedate").value : null,
+    updatedAt: nowISO(),
+  };
+  if (id) {
+    Object.assign(state.tasks.find((t) => t.id === id), fields);
+  } else {
+    state.tasks.push({
+      id: uuid(), ...fields,
+      status: "active", createdBy: "parent",
+      createdAt: nowISO(), completions: [],
+    });
+  }
+  saveState();
+  document.getElementById("task-dialog").close();
+  renderAll();
+}
+
+async function archiveTask(id) {
+  if (!(await requireParent())) return;
+  const t = state.tasks.find((t) => t.id === id);
+  t.status = "archived";
+  t.updatedAt = nowISO();
+  saveState();
+  renderAll();
+}
+
+async function restoreTask(id) {
+  if (!(await requireParent())) return;
+  const t = state.tasks.find((t) => t.id === id);
+  // 完了済み単発タスクの復元は completed に戻す（今日のタスクに再表示しない）
+  t.status = t.type === "oneoff" && t.completions.length > 0 ? "completed" : "active";
+  t.updatedAt = nowISO();
+  saveState();
+  renderAll();
+}
 function renderRewards() {}
 function renderSettings() {}
 
@@ -277,6 +403,17 @@ function renderSettings() {}
 function setupEvents() {
   document.querySelectorAll("#bottom-nav button").forEach((b) => {
     b.addEventListener("click", () => switchTab(b.dataset.tab));
+  });
+  // タスク
+  document.getElementById("btn-add-task").addEventListener("click", () => openTaskDialog());
+  document.getElementById("task-form").addEventListener("submit", saveTaskFromForm);
+  document.getElementById("btn-task-cancel").addEventListener("click", () => {
+    document.getElementById("task-dialog").close();
+  });
+  document.getElementById("task-type").addEventListener("change", updateTaskFormVisibility);
+  document.getElementById("task-frequency").addEventListener("change", updateTaskFormVisibility);
+  document.querySelectorAll('input[name="task-view"]').forEach((r) => {
+    r.addEventListener("change", renderTasks);
   });
 }
 
