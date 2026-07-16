@@ -99,6 +99,59 @@ function saveState() {
   }
 }
 
+// ===== PIN =====
+// 位置づけは誤操作・イタズラ防止（設計書 §5）。認証状態はメモリ上のみ
+async function hashPin(pin) {
+  const data = new TextEncoder().encode("kids-point-app:" + pin);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function changePin() {
+  if (state.settings.parentPinHash) {
+    const current = prompt("現在のPINを入力してください");
+    if (current === null) return;
+    if ((await hashPin(current)) !== state.settings.parentPinHash) {
+      alert("PINが違います");
+      return;
+    }
+  }
+  const p1 = prompt("新しいPIN（4桁の数字）を入力してください");
+  if (p1 === null) return;
+  if (!/^\d{4}$/.test(p1)) {
+    alert("4桁の数字で入力してください");
+    return;
+  }
+  const p2 = prompt("確認のためもう一度入力してください");
+  if (p1 !== p2) {
+    alert("一致しません");
+    return;
+  }
+  state.settings.parentPinHash = await hashPin(p1);
+  saveState();
+  alert("PINを設定しました");
+}
+
+// 親機能の入口。未設定なら初回設定を促す
+async function requireParent() {
+  if (parentUnlocked) return true;
+  if (!state.settings.parentPinHash) {
+    alert("最初に親用PINを設定します");
+    await changePin();
+    if (!state.settings.parentPinHash) return false;
+    parentUnlocked = true;
+    return true;
+  }
+  const pin = prompt("親用PINを入力してください");
+  if (pin === null) return false;
+  if ((await hashPin(pin)) === state.settings.parentPinHash) {
+    parentUnlocked = true;
+    return true;
+  }
+  alert("PINが違います");
+  return false;
+}
+
 // ===== タブ切り替え =====
 function switchTab(name) {
   parentUnlocked = false; // タブ移動で親ロックに戻す（設計書 §5）
