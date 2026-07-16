@@ -4,6 +4,7 @@
 const STORAGE_KEY = "kids-point-app";
 let state = null;
 let parentUnlocked = false; // メモリ上のみ。localStorageには保存しない
+let persistAllowed = true; // 破損データ保護: falseの間はlocalStorageへ一切書き込まない
 
 // ===== 日付・ユーティリティ =====
 // 注意: toISOString()はUTC基準のため日付判定に使用禁止（設計書 §3）
@@ -78,12 +79,14 @@ function loadState() {
       saveState();
     } else {
       state = defaultState(); // メモリ上のみ。壊れたデータは上書きしない
+      persistAllowed = false;
     }
     return;
   }
   if (parsed.version !== 1) {
     alert("対応していないデータバージョンです: " + parsed.version);
     state = defaultState();
+    persistAllowed = false; // 未知バージョンのデータを上書きしない
     return;
   }
   state = parsed;
@@ -91,9 +94,19 @@ function loadState() {
 }
 
 function saveState() {
+  if (!persistAllowed) return; // 破損データ保護モード中は書き込まない
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
+    // 保存に失敗したら、メモリ上の変更を確定せず最後に保存できた状態へ巻き戻す（設計書 §3）
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      try {
+        state = JSON.parse(raw);
+        recalcPoints();
+        renderAll();
+      } catch { /* 巻き戻し不能な場合はメモリ状態を維持 */ }
+    }
     alert("データの保存に失敗しました: " + e.message);
     throw e;
   }
@@ -154,6 +167,8 @@ async function requireParent() {
 
 // ===== タブ切り替え =====
 function switchTab(name) {
+  const current = document.querySelector("#bottom-nav button.active");
+  if (current && current.dataset.tab === name) return; // 同一タブの再タップでは何もしない
   parentUnlocked = false; // タブ移動で親ロックに戻す（設計書 §5）
   document.querySelectorAll(".tab").forEach((s) => s.classList.remove("active"));
   document.getElementById("tab-" + name).classList.add("active");
@@ -303,6 +318,7 @@ function renderTasks() {
       `<div class="item-sub">${task.points}pt ・ ${describeRecurrence(task)} ・ 完了${task.completions.length}回</div>`;
     item.append(main);
     const buttons = document.createElement("div");
+    buttons.append(smallButton("履歴", () => showTaskHistory(task.id)));
     if (view === "active") {
       buttons.append(smallButton("編集", () => openTaskDialog(task.id)));
       buttons.append(smallButton("アーカイブ", () => archiveTask(task.id)));
@@ -314,6 +330,19 @@ function renderTasks() {
   }
   if (!rec.children.length) rec.innerHTML = '<p class="empty">なし</p>';
   if (!one.children.length) one.innerHTML = '<p class="empty">なし</p>';
+}
+
+// Task completion history display (Design spec §4)
+function showTaskHistory(id) {
+  const t = state.tasks.find((x) => x.id === id);
+  if (!t) return;
+  if (t.completions.length === 0) {
+    alert(`「${t.title}」の完了履歴はまだありません`);
+    return;
+  }
+  const lines = [...t.completions].reverse().slice(0, 30)
+    .map((c) => `${c.date}  +${c.pointsAwarded}pt`);
+  alert(`「${t.title}」の完了履歴（直近${lines.length}件）\n\n${lines.join("\n")}`);
 }
 
 async function openTaskDialog(taskId = null) {
