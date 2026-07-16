@@ -685,6 +685,11 @@ function init() {
   saveState();
   setupEvents();
   renderAll();
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {
+      // 登録失敗してもアプリ自体は動作する
+    });
+  }
 }
 
 document.addEventListener("DOMContentLoaded", init);
