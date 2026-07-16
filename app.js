@@ -396,7 +396,126 @@ async function restoreTask(id) {
   saveState();
   renderAll();
 }
-function renderRewards() {}
+// ===== ごほうび =====
+function renderRewards() {
+  const view = document.querySelector('input[name="reward-view"]:checked').value;
+  const list = document.getElementById("reward-list");
+  list.innerHTML = "";
+  for (const reward of state.rewards) {
+    const archived = reward.status === "archived";
+    if (view === "active" ? archived : !archived) continue;
+    const div = document.createElement("div");
+    div.className = "list-item";
+    const main = document.createElement("div");
+    main.className = "item-main";
+    main.innerHTML =
+      `<div class="item-title">${escapeHtml(reward.title)}</div>` +
+      `<div class="item-sub">${reward.cost}pt</div>`;
+    div.append(main);
+    const buttons = document.createElement("div");
+    if (view === "active") {
+      const ex = document.createElement("button");
+      ex.className = "btn-primary btn-small";
+      ex.textContent = "交換する";
+      ex.disabled = state.points < reward.cost; // 残高不足なら無効
+      ex.addEventListener("click", () => exchangeReward(reward.id, ex));
+      buttons.append(ex);
+      buttons.append(smallButton("編集", () => openRewardDialog(reward.id)));
+      buttons.append(smallButton("アーカイブ", () => archiveReward(reward.id)));
+    } else {
+      buttons.append(smallButton("復元", () => restoreReward(reward.id)));
+    }
+    div.append(buttons);
+    list.append(div);
+  }
+  if (!list.children.length) list.innerHTML = '<p class="empty">ごほうびがありません</p>';
+  renderExchangeHistory();
+}
+
+// 交換は押した時点で成立。PIN不要（設計書 §4）
+function exchangeReward(id, btn) {
+  btn.disabled = true; // 連打防止
+  recalcPoints();      // 残高を再確認してから減算（設計書の処理ルール）
+  const reward = state.rewards.find((r) => r.id === id);
+  if (!reward || state.points < reward.cost) {
+    alert("ポイントが足りません");
+    renderAll();
+    return;
+  }
+  if (!confirm(`「${reward.title}」を${reward.cost}ポイントで交換します。\n交換後は取り消せません。`)) {
+    renderAll();
+    return;
+  }
+  addHistory({ type: "exchange", amount: -reward.cost, rewardId: reward.id, title: reward.title });
+  saveState();
+  renderAll();
+  alert(`「${reward.title}」と交換しました！`);
+}
+
+function renderExchangeHistory() {
+  const container = document.getElementById("exchange-history");
+  container.innerHTML = "";
+  const exchanges = state.pointHistory.filter((h) => h.type === "exchange").reverse();
+  if (exchanges.length === 0) {
+    container.innerHTML = '<p class="empty">まだ交換していません</p>';
+    return;
+  }
+  for (const h of exchanges) {
+    const div = document.createElement("div");
+    div.className = "list-item";
+    div.innerHTML =
+      `<div class="item-main"><div class="item-title">${escapeHtml(h.title)}</div>` +
+      `<div class="item-sub">${h.date} ・ <span class="minus">${h.amount}pt</span></div></div>`;
+    container.append(div);
+  }
+}
+
+async function openRewardDialog(rewardId = null) {
+  if (!(await requireParent())) return; // 追加・編集は親PIN必須
+  const reward = rewardId ? state.rewards.find((r) => r.id === rewardId) : null;
+  document.getElementById("reward-dialog-title").textContent =
+    reward ? "ごほうびを編集" : "ごほうびを追加";
+  document.getElementById("reward-id").value = reward ? reward.id : "";
+  document.getElementById("reward-title").value = reward ? reward.title : "";
+  document.getElementById("reward-cost").value = reward ? reward.cost : 50;
+  document.getElementById("reward-dialog").showModal();
+}
+
+function saveRewardFromForm(e) {
+  e.preventDefault();
+  const id = document.getElementById("reward-id").value;
+  const fields = {
+    title: document.getElementById("reward-title").value.trim(),
+    cost: Number(document.getElementById("reward-cost").value),
+    updatedAt: nowISO(),
+  };
+  if (id) {
+    Object.assign(state.rewards.find((r) => r.id === id), fields);
+  } else {
+    state.rewards.push({ id: uuid(), ...fields, status: "active", createdAt: nowISO() });
+  }
+  saveState();
+  document.getElementById("reward-dialog").close();
+  renderAll();
+}
+
+async function archiveReward(id) {
+  if (!(await requireParent())) return;
+  const r = state.rewards.find((r) => r.id === id);
+  r.status = "archived";
+  r.updatedAt = nowISO();
+  saveState();
+  renderAll();
+}
+
+async function restoreReward(id) {
+  if (!(await requireParent())) return;
+  const r = state.rewards.find((r) => r.id === id);
+  r.status = "active";
+  r.updatedAt = nowISO();
+  saveState();
+  renderAll();
+}
 function renderSettings() {}
 
 // ===== イベント登録 =====
@@ -414,6 +533,15 @@ function setupEvents() {
   document.getElementById("task-frequency").addEventListener("change", updateTaskFormVisibility);
   document.querySelectorAll('input[name="task-view"]').forEach((r) => {
     r.addEventListener("change", renderTasks);
+  });
+  // ごほうび
+  document.getElementById("btn-add-reward").addEventListener("click", () => openRewardDialog());
+  document.getElementById("reward-form").addEventListener("submit", saveRewardFromForm);
+  document.getElementById("btn-reward-cancel").addEventListener("click", () => {
+    document.getElementById("reward-dialog").close();
+  });
+  document.querySelectorAll('input[name="reward-view"]').forEach((r) => {
+    r.addEventListener("change", renderRewards);
   });
 }
 
