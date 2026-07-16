@@ -163,6 +163,42 @@ function switchTab(name) {
   renderAll();
 }
 
+// ===== タスク判定（リセット処理なし・その場判定。設計書 §3） =====
+function isTaskForToday(task) {
+  if (task.status !== "active") return false;
+  if (task.type === "oneoff") return task.dueDate !== null && task.dueDate <= todayStr();
+  if (task.recurrence.frequency === "daily") return true;
+  return task.recurrence.weekdays.includes(new Date().getDay());
+}
+
+function isCompletedToday(task) {
+  return task.completions.some((c) => c.date === todayStr());
+}
+
+// ===== タスク完了（設計書 §3「タスク完了処理の詳細」） =====
+function completeTask(taskId, btn) {
+  btn.disabled = true; // 連打防止
+  const task = state.tasks.find((t) => t.id === taskId);
+  const today = todayStr();
+  // taskId + date の一意制約: 同日完了済みなら何もしない
+  if (!task || task.completions.some((c) => c.date === today)) return;
+  task.completions.push({ date: today, completedAt: nowISO(), pointsAwarded: task.points });
+  if (task.type === "oneoff") task.status = "completed";
+  task.updatedAt = nowISO();
+  addHistory({ type: "task", amount: task.points, taskId: task.id, title: task.title });
+  saveState();
+  showPointGain(task.points);
+  renderAll();
+}
+
+function showPointGain(points) {
+  const el = document.createElement("div");
+  el.className = "point-gain";
+  el.textContent = `+${points}pt`;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
 // ===== 描画ディスパッチ（各renderは後続タスクで実装） =====
 function renderAll() {
   renderHome();
@@ -170,7 +206,69 @@ function renderAll() {
   renderRewards();
   renderSettings();
 }
-function renderHome() {}
+function renderHome() {
+  document.getElementById("home-points").textContent = state.points;
+  renderNextRewardHint();
+  const container = document.getElementById("today-tasks");
+  container.innerHTML = "";
+  const todo = [], done = [];
+  for (const task of state.tasks) {
+    if (!isTaskForToday(task)) continue;
+    (isCompletedToday(task) ? done : todo).push(task);
+  }
+  if (todo.length === 0 && done.length === 0) {
+    container.innerHTML = '<p class="empty">今日のタスクはありません</p>';
+    return;
+  }
+  if (todo.length === 0) {
+    const p = document.createElement("p");
+    p.className = "all-done";
+    p.textContent = "🎉 今日は全部完了！";
+    container.append(p);
+  }
+  for (const task of todo) container.append(homeTaskItem(task, false));
+  for (const task of done) container.append(homeTaskItem(task, true));
+}
+
+function homeTaskItem(task, completed) {
+  const div = document.createElement("div");
+  div.className = "task-card" + (completed ? " completed" : "");
+  const info = document.createElement("div");
+  info.className = "item-main";
+  info.innerHTML =
+    `<div class="item-title">${escapeHtml(task.title)}</div>` +
+    `<div class="item-sub">${task.points}pt</div>`;
+  div.append(info);
+  const btn = document.createElement("button");
+  btn.className = "btn-complete";
+  if (completed) {
+    btn.textContent = "✔ 完了";
+    btn.disabled = true;
+  } else {
+    btn.textContent = "やった！";
+    btn.addEventListener("click", () => completeTask(task.id, btn));
+  }
+  div.append(btn);
+  return div;
+}
+
+// 「あと◯pt」欄の3状態（設計書 §4 ホーム）
+function renderNextRewardHint() {
+  const el = document.getElementById("next-reward-hint");
+  const active = state.rewards.filter((r) => r.status === "active");
+  if (active.length === 0) {
+    el.hidden = true; // ごほうび未登録なら欄ごと非表示
+    return;
+  }
+  el.hidden = false;
+  const unaffordable = active.filter((r) => r.cost > state.points);
+  if (unaffordable.length === 0) {
+    el.textContent = "交換できるごほうびがあります 🎁";
+    return;
+  }
+  const nearest = unaffordable.reduce((a, b) => (a.cost <= b.cost ? a : b));
+  el.textContent = `あと ${nearest.cost - state.points}pt で「${nearest.title}」と交換できる`;
+}
 function renderTasks() {}
 function renderRewards() {}
 function renderSettings() {}
