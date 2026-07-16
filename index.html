@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ポイントクエスト</title>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2b6cb0">
+</head>
+<body>
+<main>
+  <!-- ホーム -->
+  <section id="tab-home" class="tab active">
+    <div class="points-card">
+      <div class="points-label">いまのポイント</div>
+      <div class="points-value"><span id="home-points">0</span><span class="pt-unit">pt</span></div>
+      <div class="next-reward" id="next-reward-hint" hidden></div>
+    </div>
+    <h2>今日のタスク</h2>
+    <div id="today-tasks"></div>
+  </section>
+
+  <!-- タスク -->
+  <section id="tab-tasks" class="tab">
+    <div class="section-header">
+      <h2>タスク</h2>
+      <button id="btn-add-task" class="btn-primary">＋ 追加</button>
+    </div>
+    <div class="toggle-row">
+      <label><input type="radio" name="task-view" value="active" checked> 有効</label>
+      <label><input type="radio" name="task-view" value="archived"> アーカイブ済み</label>
+    </div>
+    <h3>繰り返し</h3>
+    <div id="recurring-tasks"></div>
+    <h3>単発</h3>
+    <div id="oneoff-tasks"></div>
+  </section>
+
+  <!-- ごほうび -->
+  <section id="tab-rewards" class="tab">
+    <div class="section-header">
+      <h2>ごほうび</h2>
+      <button id="btn-add-reward" class="btn-primary">＋ 追加</button>
+    </div>
+    <div class="toggle-row">
+      <label><input type="radio" name="reward-view" value="active" checked> 有効</label>
+      <label><input type="radio" name="reward-view" value="archived"> アーカイブ済み</label>
+    </div>
+    <div id="reward-list"></div>
+    <h3>交換履歴</h3>
+    <div id="exchange-history"></div>
+  </section>
+
+  <!-- 設定 -->
+  <section id="tab-settings" class="tab">
+    <div id="settings-locked">
+      <p>設定は親用PINが必要です。</p>
+      <button id="btn-unlock-settings" class="btn-primary">PINを入力</button>
+    </div>
+    <div id="settings-content" hidden>
+      <h2>設定</h2>
+      <section class="settings-block">
+        <h3>子どもの名前</h3>
+        <div class="form-row">
+          <input id="child-name" type="text" placeholder="名前">
+          <button id="btn-save-name" class="btn-small">保存</button>
+        </div>
+      </section>
+      <section class="settings-block">
+        <h3>PIN</h3>
+        <button id="btn-change-pin" class="btn-small">PINを変更</button>
+        <p class="note">PINを忘れた場合はブラウザデータの初期化が必要です。保存データも失われるため、定期的にバックアップを取ってください。</p>
+      </section>
+      <section class="settings-block">
+        <h3>ポイント手動調整</h3>
+        <div class="form-row">
+          <input id="adjust-amount" type="number" placeholder="±ポイント">
+          <input id="adjust-note" type="text" placeholder="理由">
+          <button id="btn-adjust" class="btn-small">調整する</button>
+        </div>
+      </section>
+      <section class="settings-block">
+        <h3>ポイント履歴</h3>
+        <div id="point-history"></div>
+      </section>
+      <section class="settings-block">
+        <h3>データ</h3>
+        <button id="btn-export" class="btn-small">バックアップを書き出す</button>
+        <button id="btn-import" class="btn-small">バックアップを読み込む</button>
+        <input id="import-file" type="file" accept=".json" hidden>
+        <button id="btn-reset" class="btn-small btn-danger">全データを初期化</button>
+      </section>
+    </div>
+  </section>
+</main>
+
+<nav id="bottom-nav">
+  <button data-tab="home" class="active">🏠<span>ホーム</span></button>
+  <button data-tab="tasks">✅<span>タスク</span></button>
+  <button data-tab="rewards">🎁<span>ごほうび</span></button>
+  <button data-tab="settings">⚙️<span>設定</span></button>
+</nav>
+
+<!-- タスク追加/編集ダイアログ -->
+<dialog id="task-dialog">
+  <form id="task-form">
+    <h3 id="task-dialog-title">タスクを追加</h3>
+    <input type="hidden" id="task-id">
+    <label>タイトル <input id="task-title" type="text" required maxlength="40"></label>
+    <label>ポイント <input id="task-points" type="number" min="1" max="9999" required></label>
+    <label>種類
+      <select id="task-type">
+        <option value="recurring">繰り返し</option>
+        <option value="oneoff">単発</option>
+      </select>
+    </label>
+    <div id="recurrence-fields">
+      <label>頻度
+        <select id="task-frequency">
+          <option value="daily">毎日</option>
+          <option value="weekly">毎週</option>
+        </select>
+      </label>
+      <div id="weekday-fields" class="weekday-row" hidden>
+        <label><input type="checkbox" class="weekday-cb" value="0">日</label>
+        <label><input type="checkbox" class="weekday-cb" value="1">月</label>
+        <label><input type="checkbox" class="weekday-cb" value="2">火</label>
+        <label><input type="checkbox" class="weekday-cb" value="3">水</label>
+        <label><input type="checkbox" class="weekday-cb" value="4">木</label>
+        <label><input type="checkbox" class="weekday-cb" value="5">金</label>
+        <label><input type="checkbox" class="weekday-cb" value="6">土</label>
+      </div>
+    </div>
+    <div id="oneoff-fields" hidden>
+      <label>期限 <input id="task-duedate" type="date"></label>
+    </div>
+    <div class="dialog-buttons">
+      <button type="button" id="btn-task-cancel">キャンセル</button>
+      <button type="submit" class="btn-primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ごほうび追加/編集ダイアログ -->
+<dialog id="reward-dialog">
+  <form id="reward-form">
+    <h3 id="reward-dialog-title">ごほうびを追加</h3>
+    <input type="hidden" id="reward-id">
+    <label>タイトル <input id="reward-title" type="text" required maxlength="40"></label>
+    <label>必要ポイント <input id="reward-cost" type="number" min="1" max="99999" required></label>
+    <div class="dialog-buttons">
+      <button type="button" id="btn-reward-cancel">キャンセル</button>
+      <button type="submit" class="btn-primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

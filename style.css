@@ -1,0 +1,164 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary: #2b6cb0;
+  --primary-dark: #2c5282;
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --text: #2d3748;
+  --text-sub: #718096;
+  --border: #e2e8f0;
+  --danger: #c53030;
+  --success: #2f855a;
+}
+
+body {
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding-bottom: 72px; /* 下タブぶん */
+}
+
+main { max-width: 640px; margin: 0 auto; padding: 16px; }
+
+h2 { font-size: 1.1rem; margin: 16px 0 8px; }
+h3 { font-size: 0.95rem; margin: 14px 0 6px; color: var(--text-sub); }
+
+.tab { display: none; }
+.tab.active { display: block; }
+
+/* ホーム: ポイントカード */
+.points-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+.points-label { font-size: 0.85rem; color: var(--text-sub); }
+.points-value { font-size: 3rem; font-weight: 700; color: var(--primary); }
+.pt-unit { font-size: 1.2rem; margin-left: 4px; }
+.next-reward { font-size: 0.9rem; color: var(--text-sub); margin-top: 8px; }
+
+/* タスクカード・リスト共通 */
+.task-card, .list-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.task-card.completed { opacity: 0.55; }
+.item-main { flex: 1; min-width: 0; }
+.item-title { font-weight: 600; }
+.item-sub { font-size: 0.8rem; color: var(--text-sub); margin-top: 2px; }
+.plus { color: var(--success); }
+.minus { color: var(--danger); }
+
+.empty, .all-done { text-align: center; color: var(--text-sub); padding: 16px 0; }
+.all-done { color: var(--success); font-weight: 700; }
+
+/* ボタン */
+button {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.45; cursor: default; }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-primary:not(:disabled):hover { background: var(--primary-dark); }
+.btn-small { padding: 6px 10px; font-size: 0.85rem; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-complete { background: var(--primary); border-color: var(--primary); color: #fff; white-space: nowrap; }
+
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.toggle-row { display: flex; gap: 16px; margin: 10px 0; font-size: 0.9rem; }
+.form-row { display: flex; gap: 8px; }
+.form-row input { flex: 1; }
+
+/* 設定 */
+.settings-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.settings-block h3 { margin-top: 0; }
+.settings-block button { margin: 4px 4px 0 0; }
+.note { font-size: 0.8rem; color: var(--text-sub); margin-top: 8px; }
+#settings-locked { text-align: center; padding: 48px 0; }
+#settings-locked p { margin-bottom: 12px; }
+
+input[type="text"], input[type="number"], input[type="date"], select {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+/* 下タブ */
+#bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+}
+#bottom-nav button {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 8px 0 10px;
+  font-size: 1.2rem;
+  color: var(--text-sub);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+#bottom-nav button span { font-size: 0.65rem; }
+#bottom-nav button.active { color: var(--primary); font-weight: 700; }
+
+/* ダイアログ */
+dialog {
+  border: none;
+  border-radius: 12px;
+  padding: 20px;
+  width: min(92vw, 420px);
+}
+dialog::backdrop { background: rgba(0,0,0,0.4); }
+dialog h3 { color: var(--text); margin-bottom: 12px; }
+dialog label { display: block; margin-bottom: 10px; font-size: 0.9rem; }
+dialog label input, dialog label select { margin-top: 4px; }
+.weekday-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.weekday-row label { display: flex; align-items: center; gap: 2px; margin: 0; }
+.weekday-row input { width: auto; }
+.dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+/* ポイント獲得演出 */
+.point-gain {
+  position: fixed;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--success);
+  pointer-events: none;
+  animation: pointGain 1.2s ease-out forwards;
+}
+@keyframes pointGain {
+  0% { opacity: 0; transform: translate(-50%, -30%); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -90%); }
+}
