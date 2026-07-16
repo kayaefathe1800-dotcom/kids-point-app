@@ -648,6 +648,7 @@ function importData(file) {
     if (!confirm(`このデータを読み込みますか？現在のデータは上書きされます。\n\n${summary}`)) return;
     // 誤ファイル対策: 現在データを一時バックアップしてから上書き
     localStorage.setItem(STORAGE_KEY + "-backup-before-import", localStorage.getItem(STORAGE_KEY) ?? "");
+    persistAllowed = true; // 明示的な同意（確認ダイアログOK）で保護モードを解除
     state = d;
     recalcPoints();
     saveState();
@@ -660,6 +661,7 @@ function importData(file) {
 function resetAll() {
   if (!confirm("全データを初期化します。よろしいですか？")) return;
   if (!confirm("本当に初期化しますか？この操作は取り消せません。")) return;
+  persistAllowed = true; // 明示的な同意（二重確認OK）で保護モードを解除
   state = defaultState();
   parentUnlocked = false;
   saveState();
