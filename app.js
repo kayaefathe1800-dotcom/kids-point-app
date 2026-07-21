@@ -622,7 +622,8 @@ async function handleCreateFamily() {
   if (!confirm("新しい家族コードを発行します。クラウドは空の状態から始まります。よろしいですか？")) return;
   const code = await createFamily();
   if (!code) return;
-  await startCloudMode(code);
+  const ok = await startCloudMode(code);
+  if (!ok) return;
   alert(`家族コードを発行しました: ${code}\nもう一台の端末でこのコードを入力してください。`);
 }
 
@@ -632,22 +633,28 @@ async function handleJoinFamily() {
   const trimmed = code.trim().toUpperCase();
   if (!trimmed) return;
   if (!confirm("家族コードに参加すると、この端末のデータは削除され共有データに置き換わります。よろしいですか？")) return;
-  const ok = await joinFamily(trimmed);
+  const joined = await joinFamily(trimmed);
+  if (!joined) return;
+  const ok = await startCloudMode(trimmed);
   if (!ok) return;
-  await startCloudMode(trimmed);
   alert("参加しました。共有データを読み込みます。");
 }
 
+// 成功時true・失敗時false を返す。取得失敗時はクラウドモードに入らず、
+// isCloudMode()の状態と実際の同期状況が食い違わないようにする
 async function startCloudMode(familyCode) {
   try {
     state = await fetchCloudState(familyCode);
     recalcPoints();
   } catch (e) {
-    alert("データの取得に失敗しました: " + e.message);
-    return;
+    localStorage.removeItem("kids-point-app-family-code");
+    alert("データの取得に失敗しました。もう一度お試しください: " + e.message);
+    renderAll();
+    return false;
   }
   subscribeRealtime(familyCode);
   renderAll();
+  return true;
 }
 
 // ===== バックアップ（設計書 §6） =====
