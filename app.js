@@ -553,6 +553,23 @@ function renderSettings() {
   if (locked) return;
   document.getElementById("child-name").value = state.settings.childName;
   renderPointHistory();
+  renderSyncStatus();
+}
+
+// 共有設定の表示・インポートボタンの無効化（設計書§6・§7）
+function renderSyncStatus() {
+  const statusEl = document.getElementById("sync-status");
+  const actionsEl = document.getElementById("sync-offline-actions");
+  if (isCloudMode()) {
+    statusEl.textContent = `現在の状態: クラウド同期モード（家族コード: ${getFamilyCode()}）`;
+    actionsEl.hidden = true;
+  } else {
+    statusEl.textContent = "現在の状態: オフラインモード（この端末のみ）";
+    actionsEl.hidden = false;
+  }
+  const importBtn = document.getElementById("btn-import");
+  importBtn.disabled = isCloudMode();
+  importBtn.title = isCloudMode() ? "クラウド同期モード中は使用できません" : "";
 }
 
 async function unlockSettings() {
@@ -598,6 +615,39 @@ function adjustPoints() {
   renderAll();
   document.getElementById("adjust-amount").value = "";
   document.getElementById("adjust-note").value = "";
+}
+
+// ===== 共有設定（クラウド同期） =====
+async function handleCreateFamily() {
+  if (!confirm("新しい家族コードを発行します。クラウドは空の状態から始まります。よろしいですか？")) return;
+  const code = await createFamily();
+  if (!code) return;
+  await startCloudMode(code);
+  alert(`家族コードを発行しました: ${code}\nもう一台の端末でこのコードを入力してください。`);
+}
+
+async function handleJoinFamily() {
+  const code = prompt("家族コードを入力してください（例: A3F9-K2M1）");
+  if (code === null) return;
+  const trimmed = code.trim().toUpperCase();
+  if (!trimmed) return;
+  if (!confirm("家族コードに参加すると、この端末のデータは削除され共有データに置き換わります。よろしいですか？")) return;
+  const ok = await joinFamily(trimmed);
+  if (!ok) return;
+  await startCloudMode(trimmed);
+  alert("参加しました。共有データを読み込みます。");
+}
+
+async function startCloudMode(familyCode) {
+  try {
+    state = await fetchCloudState(familyCode);
+    recalcPoints();
+  } catch (e) {
+    alert("データの取得に失敗しました: " + e.message);
+    return;
+  }
+  subscribeRealtime(familyCode);
+  renderAll();
 }
 
 // ===== バックアップ（設計書 §6） =====
@@ -694,6 +744,8 @@ function setupEvents() {
     r.addEventListener("change", renderRewards);
   });
   // 設定
+  document.getElementById("btn-create-family").addEventListener("click", handleCreateFamily);
+  document.getElementById("btn-join-family").addEventListener("click", handleJoinFamily);
   document.getElementById("btn-unlock-settings").addEventListener("click", unlockSettings);
   document.getElementById("btn-save-name").addEventListener("click", saveChildName);
   document.getElementById("btn-change-pin").addEventListener("click", changePin);
