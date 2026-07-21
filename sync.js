@@ -186,3 +186,111 @@ async function cloudUpdateSettings(fields) {
   const { error } = await sb.from("family_settings").update({ ...fields, updated_at: nowISO() }).eq("family_code", familyCode);
   if (error) throw error;
 }
+
+// ===== リアルタイム同期 =====
+function subscribeRealtime(familyCode) {
+  initSupabase();
+  if (realtimeChannel) sb.removeChannel(realtimeChannel); // 再接続時にチャンネルが積み重なるのを防ぐ
+  const tables = ["tasks", "task_completions", "rewards", "point_history", "family_settings"];
+  let channel = sb.channel(`family-${familyCode}`);
+  for (const table of tables) {
+    channel = channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table, filter: `family_code=eq.${familyCode}` },
+      applyRealtimeChange
+    );
+  }
+  realtimeChannel = channel.subscribe((status) => {
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+      setTimeout(() => {
+        subscribeRealtime(familyCode);
+        fullResyncFromCloud();
+      }, 2000);
+    }
+  });
+}
+
+async function fullResyncFromCloud() {
+  const familyCode = getFamilyCode();
+  if (!familyCode) return;
+  try {
+    const fresh = await fetchCloudState(familyCode);
+    state.settings = fresh.settings;
+    state.tasks = fresh.tasks;
+    state.rewards = fresh.rewards;
+    state.pointHistory = fresh.pointHistory;
+    recalcPoints();
+    renderAll();
+  } catch {
+    // 再接続後の再取得にも失敗した場合は何もしない（次の再接続タイミングで再試行される）
+  }
+}
+
+// 他端末（自分自身の書き込みも含む）からの変更を該当データだけstateに反映する（設計書§5）
+function applyRealtimeChange(payload) {
+  const { table, eventType, new: newRow, old: oldRow } = payload;
+  if (table === "tasks") applyTaskChange(eventType, newRow, oldRow);
+  else if (table === "task_completions") applyCompletionChange(eventType, newRow, oldRow);
+  else if (table === "rewards") applyRewardChange(eventType, newRow, oldRow);
+  else if (table === "point_history") applyHistoryChange(eventType, newRow, oldRow);
+  else if (table === "family_settings") applySettingsChange(eventType, newRow, oldRow);
+  recalcPoints();
+  renderAll();
+}
+
+function applyTaskChange(eventType, newRow, oldRow) {
+  if (eventType === "DELETE") {
+    state.tasks = state.tasks.filter((t) => t.id !== oldRow.id);
+    return;
+  }
+  const mapped = {
+    id: newRow.id, title: newRow.title, points: newRow.points, type: newRow.type,
+    recurrence: newRow.type === "recurring" ? { frequency: newRow.frequency, weekdays: newRow.weekdays || [] } : null,
+    dueDate: newRow.due_date, status: newRow.status, createdBy: newRow.created_by,
+    createdAt: newRow.created_at, updatedAt: newRow.updated_at,
+  };
+  const existing = state.tasks.find((t) => t.id === newRow.id);
+  if (existing) {
+    Object.assign(existing, mapped); // completions配列は保持
+  } else {
+    state.tasks.push({ ...mapped, completions: [] });
+  }
+}
+
+function applyCompletionChange(eventType, newRow) {
+  if (eventType !== "INSERT") return; // 完了記録は追記のみ
+  const task = state.tasks.find((t) => t.id === newRow.task_id);
+  if (!task) return; // タスク本体のイベントがまだ届いていない場合は無視（次のtasksイベントで補完）
+  if (task.completions.some((c) => c.date === newRow.date)) return; // 反映済み（自分自身の書き込み等）
+  task.completions.push({ date: newRow.date, completedAt: newRow.completed_at, pointsAwarded: newRow.points_awarded });
+}
+
+function applyRewardChange(eventType, newRow, oldRow) {
+  if (eventType === "DELETE") {
+    state.rewards = state.rewards.filter((r) => r.id !== oldRow.id);
+    return;
+  }
+  const mapped = {
+    id: newRow.id, title: newRow.title, cost: newRow.cost, status: newRow.status,
+    createdAt: newRow.created_at, updatedAt: newRow.updated_at,
+  };
+  const existing = state.rewards.find((r) => r.id === newRow.id);
+  if (existing) Object.assign(existing, mapped);
+  else state.rewards.push(mapped);
+}
+
+function applyHistoryChange(eventType, newRow) {
+  if (eventType !== "INSERT") return; // 履歴は追記のみ
+  if (state.pointHistory.some((h) => h.id === newRow.id)) return; // 重複反映防止
+  state.pointHistory.push({
+    id: newRow.id, type: newRow.type, amount: newRow.amount, taskId: newRow.task_id,
+    rewardId: newRow.reward_id, title: newRow.title, note: newRow.note,
+    date: newRow.date, createdAt: newRow.created_at,
+  });
+}
+
+function applySettingsChange(eventType, newRow) {
+  if (eventType === "DELETE") return;
+  state.settings.childName = newRow.child_name;
+  state.settings.parentPinHash = newRow.parent_pin_hash;
+}
