@@ -191,12 +191,25 @@ function isCompletedToday(task) {
 }
 
 // ===== タスク完了（設計書 §3「タスク完了処理の詳細」） =====
-function completeTask(taskId, btn) {
+async function completeTask(taskId, btn) {
   btn.disabled = true; // 連打防止
   const task = state.tasks.find((t) => t.id === taskId);
   const today = todayStr();
   // taskId + date の一意制約: 同日完了済みなら何もしない
   if (!task || task.completions.some((c) => c.date === today)) return;
+  if (isCloudMode()) {
+    try {
+      const ok = await cloudInsertTaskCompletion(task, {
+        date: today, completedAt: nowISO(), pointsAwarded: task.points,
+      });
+      if (ok) showPointGain(task.points);
+      // stateへの反映はRealtime経由（applyRealtimeChange）で行われる
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      btn.disabled = false;
+    }
+    return;
+  }
   task.completions.push({ date: today, completedAt: nowISO(), pointsAwarded: task.points });
   if (task.type === "oneoff") task.status = "completed";
   task.updatedAt = nowISO();
@@ -769,12 +782,25 @@ function setupEvents() {
 }
 
 // ===== 初期化 =====
-function init() {
-  loadState();
-  state.settings.lastOpenedDate = todayStr();
-  saveState();
+async function init() {
   setupEvents();
-  renderAll();
+  if (isCloudMode()) {
+    const familyCode = getFamilyCode();
+    try {
+      state = await fetchCloudState(familyCode);
+      recalcPoints();
+    } catch (e) {
+      alert("クラウドデータの取得に失敗しました。ネット接続をご確認ください: " + e.message);
+      state = defaultState(); // 画面表示のための最低限の空状態（保存はしない）
+    }
+    subscribeRealtime(familyCode);
+    renderAll();
+  } else {
+    loadState();
+    state.settings.lastOpenedDate = todayStr();
+    saveState();
+    renderAll();
+  }
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {
       // 登録失敗してもアプリ自体は動作する
