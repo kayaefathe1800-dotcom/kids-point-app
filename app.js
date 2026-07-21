@@ -5,6 +5,8 @@ const STORAGE_KEY = "kids-point-app";
 let state = null;
 let parentUnlocked = false; // メモリ上のみ。localStorageには保存しない
 let persistAllowed = true; // 破損データ保護: falseの間はlocalStorageへ一切書き込まない
+let calendarYear = new Date().getFullYear();  // ホーム画面カレンダーの表示中の年（一時的な状態。保存しない）
+let calendarMonth = new Date().getMonth();    // 0-indexed。同上
 
 // ===== 日付・ユーティリティ =====
 // 注意: toISOString()はUTC基準のため日付判定に使用禁止（設計書 §3）
@@ -254,6 +256,10 @@ function renderHome() {
     if (!isTaskForToday(task)) continue;
     (isCompletedToday(task) ? done : todo).push(task);
   }
+  // 達成率・カレンダーは「今日のタスクなし」の早期returnより前に描画する
+  // （today-tasks欄の中身とは独立して、常に表示・更新されるべきもののため）
+  renderAchievement(todo.length, done.length);
+  renderCalendar();
   if (todo.length === 0 && done.length === 0) {
     container.innerHTML = '<p class="empty">今日のタスクはありません</p>';
     return;
@@ -306,6 +312,80 @@ function renderNextRewardHint() {
   }
   const nearest = unaffordable.reduce((a, b) => (a.cost <= b.cost ? a : b));
   el.textContent = `あと ${nearest.cost - state.points}pt で「${nearest.title}」と交換できる`;
+}
+
+// ===== 達成率表示（今日のタスク進捗） =====
+function renderAchievement(todoCount, doneCount) {
+  const totalCount = todoCount + doneCount;
+  const wrap = document.getElementById("achievement-wrap");
+  if (totalCount === 0) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  // done.length は理論上totalCountを超えないが、念のため上限処理する
+  const clampedDone = Math.min(doneCount, totalCount);
+  const percentage = Math.round((clampedDone / totalCount) * 100);
+  document.getElementById("achievement-text").textContent = `今日 ${clampedDone}/${totalCount} 完了`;
+  document.getElementById("achievement-pct").textContent = `${percentage}%`;
+  document.getElementById("achievement-fill").style.width = `${percentage}%`;
+}
+
+// ===== カレンダー履歴 =====
+// 注意: toISOString()は使用禁止（UTC基準のため日付がずれる。設計書 §3と同じ理由）
+function formatLocalDate(year, month, day) {
+  return [year, String(month + 1).padStart(2, "0"), String(day).padStart(2, "0")].join("-");
+}
+
+function renderCalendar() {
+  const year = calendarYear;
+  const month = calendarMonth; // 0-indexed
+  document.getElementById("cal-month-label").textContent = `${year}年${month + 1}月`;
+
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const completedDates = new Set();
+  for (const task of state.tasks || []) {
+    // completionsが配列でない（古い・破損データ等の）場合でもカレンダー描画を止めない
+    const completions = Array.isArray(task.completions) ? task.completions : [];
+    for (const c of completions) {
+      // c.dateは通常"YYYY-MM-DD"形式だが、形式が壊れていても無視するだけにする
+      const completionDate = String(c?.date || "").slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(completionDate) && completionDate.startsWith(monthPrefix)) {
+        completedDates.add(completionDate);
+      }
+    }
+  }
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = todayStr();
+
+  let cells = "";
+  for (const d of ["日", "月", "火", "水", "木", "金", "土"]) {
+    cells += `<div class="cal-head">${d}</div>`;
+  }
+  for (let i = 0; i < firstDay; i++) cells += "<div></div>";
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = formatLocalDate(year, month, d);
+    const done = completedDates.has(dateStr);
+    const isToday = dateStr === today;
+    cells += `<div class="cal-day${done ? " cal-done" : ""}${isToday ? " cal-today" : ""}">${d}</div>`;
+  }
+  document.getElementById("home-calendar").innerHTML = `<div class="cal-grid">${cells}</div>`;
+}
+
+function changeCalendarMonth(delta) {
+  const target = new Date(calendarYear, calendarMonth + delta, 1);
+  calendarYear = target.getFullYear();
+  calendarMonth = target.getMonth();
+  renderCalendar();
+}
+
+function goToCurrentCalendarMonth() {
+  const now = new Date();
+  calendarYear = now.getFullYear();
+  calendarMonth = now.getMonth();
+  renderCalendar();
 }
 // ===== タスク管理 =====
 function describeRecurrence(task) {
@@ -844,6 +924,10 @@ function setupEvents() {
   document.querySelectorAll("#bottom-nav button").forEach((b) => {
     b.addEventListener("click", () => switchTab(b.dataset.tab));
   });
+  // ホーム（カレンダー月移動）
+  document.getElementById("btn-cal-prev").addEventListener("click", () => changeCalendarMonth(-1));
+  document.getElementById("btn-cal-next").addEventListener("click", () => changeCalendarMonth(1));
+  document.getElementById("btn-cal-today").addEventListener("click", goToCurrentCalendarMonth);
   // タスク
   document.getElementById("btn-add-task").addEventListener("click", () => openTaskDialog());
   document.getElementById("task-form").addEventListener("submit", saveTaskFromForm);
