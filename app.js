@@ -970,6 +970,16 @@ function setupEvents() {
   document.getElementById("btn-cal-prev").addEventListener("click", () => changeCalendarMonth(-1));
   document.getElementById("btn-cal-next").addEventListener("click", () => changeCalendarMonth(1));
   document.getElementById("btn-cal-today").addEventListener("click", goToCurrentCalendarMonth);
+  // カレンダーのセルは月移動のたびに再生成されるため、セル個別ではなく
+  // 親要素にイベント委譲で1回だけ登録する（設計書§4）
+  document.getElementById("home-calendar").addEventListener("click", (e) => {
+    const cell = e.target.closest(".cal-day");
+    if (!cell || !cell.classList.contains("cal-done")) return;
+    showDayDetail(cell.dataset.date);
+  });
+  document.getElementById("btn-day-detail-close").addEventListener("click", () => {
+    document.getElementById("day-detail-dialog").close();
+  });
   // タスク
   document.getElementById("btn-add-task").addEventListener("click", () => openTaskDialog());
   document.getElementById("task-form").addEventListener("submit", saveTaskFromForm);
