@@ -1080,6 +1080,12 @@ function setupEvents() {
     e.target.value = "";
   });
   document.getElementById("btn-reset").addEventListener("click", resetAll);
+  // 端末ロール
+  document.getElementById("btn-role-parent").addEventListener("click", () => chooseRole("parent"));
+  document.getElementById("btn-role-child").addEventListener("click", () => chooseRole("child"));
+  document.getElementById("parent-mode-link").addEventListener("click", requestParentOverride);
+  document.getElementById("btn-device-role-parent").addEventListener("click", () => setDeviceRole("parent"));
+  document.getElementById("btn-device-role-child").addEventListener("click", () => setDeviceRole("child"));
 }
 
 // ===== 初期化 =====
@@ -1101,6 +1107,10 @@ async function init() {
     state.settings.lastOpenedDate = todayStr();
     saveState();
     renderAll();
+  }
+  applyRoleUI();
+  if (!getBaseRole()) {
+    document.getElementById("role-choice-dialog").showModal();
   }
   if ("serviceWorker" in navigator) {
     // ページ読み込み時点で既に別バージョンのSWに制御されていたかを先に記録する。
