@@ -2,11 +2,13 @@
 
 // ===== 定数・グローバル =====
 const STORAGE_KEY = "kids-point-app";
+const ROLE_KEY = "kids-point-app-role"; // 端末ロール。stateとは独立してlocalStorageに直接保存
 let state = null;
 let parentUnlocked = false; // メモリ上のみ。localStorageには保存しない
 let persistAllowed = true; // 破損データ保護: falseの間はlocalStorageへ一切書き込まない
 let calendarYear = new Date().getFullYear();  // ホーム画面カレンダーの表示中の年（一時的な状態。保存しない）
 let calendarMonth = new Date().getMonth();    // 0-indexed。同上
+let sessionRoleOverride = false; // メモリ上のみ。子ども端末でのPINによる一時的な保護者モード昇格
 
 // ===== 日付・ユーティリティ =====
 // 注意: toISOString()はUTC基準のため日付判定に使用禁止（設計書 §3）
@@ -175,6 +177,67 @@ async function requireParent() {
   }
   alert("PINが違います");
   return false;
+}
+
+// ===== 端末ロール（保護者用/子ども用） =====
+// ロールは家族データ(state)とは独立した端末固有の設定。localStorageに直接保存する
+function getBaseRole() {
+  const r = localStorage.getItem(ROLE_KEY);
+  return r === "parent" || r === "child" ? r : null;
+}
+
+function setBaseRole(role) {
+  localStorage.setItem(ROLE_KEY, role);
+}
+
+// sessionRoleOverrideが立っている間は端末の基本ロールに関わらず保護者として扱う
+function effectiveRole() {
+  if (sessionRoleOverride) return "parent";
+  return getBaseRole() || "child";
+}
+
+// 有効ロールに応じてボトムナビの表示/非表示を切り替える
+function applyRoleUI() {
+  const isParent = effectiveRole() === "parent";
+  document.querySelector('#bottom-nav button[data-tab="tasks"]').hidden = !isParent;
+  document.querySelector('#bottom-nav button[data-tab="settings"]').hidden = !isParent;
+  document.getElementById("parent-mode-link").hidden = isParent;
+  const current = document.querySelector("#bottom-nav button.active");
+  if (current && current.hidden) {
+    switchTab("home");
+  }
+}
+
+// 初回選択ダイアログでのロール決定
+async function chooseRole(role) {
+  if (role === "parent") {
+    if (!(await requireParent())) return;
+    setBaseRole("parent");
+  } else {
+    setBaseRole("child");
+  }
+  document.getElementById("role-choice-dialog").close();
+  applyRoleUI();
+}
+
+// 子どもロールのホームにある「保護者の方はこちら」リンクからの一時昇格
+async function requestParentOverride() {
+  if (!(await requireParent())) return;
+  sessionRoleOverride = true;
+  applyRoleUI();
+  switchTab("settings");
+}
+
+// 設定タブ内での端末ロールの明示的な切り替え（設定タブ自体が既にPIN解除済みの文脈なので追加のPIN確認は不要）
+function setDeviceRole(role) {
+  setBaseRole(role);
+  applyRoleUI();
+  renderDeviceRoleSetting();
+}
+
+function renderDeviceRoleSetting() {
+  document.getElementById("device-role-label").textContent =
+    effectiveRole() === "parent" ? "保護者用" : "子ども用";
 }
 
 // ===== タブ切り替え =====
@@ -769,6 +832,7 @@ function renderSettings() {
   document.getElementById("child-name").value = state.settings.childName;
   renderPointHistory();
   renderSyncStatus();
+  renderDeviceRoleSetting();
 }
 
 // 共有設定の表示・インポートボタンの無効化（設計書§6・§7）
