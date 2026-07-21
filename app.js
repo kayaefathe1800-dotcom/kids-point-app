@@ -924,7 +924,8 @@ function setupEvents() {
   document.querySelectorAll("#bottom-nav button").forEach((b) => {
     b.addEventListener("click", () => switchTab(b.dataset.tab));
   });
-  document.getElementById("btn-update-reload").addEventListener("click", () => location.reload());
+  // ボタンだけでなくバナー全体をタップしても反応するようにする（モバイルでの誤タップ対策）
+  document.getElementById("update-banner").addEventListener("click", () => location.reload());
   // ホーム（カレンダー月移動）
   document.getElementById("btn-cal-prev").addEventListener("click", () => changeCalendarMonth(-1));
   document.getElementById("btn-cal-next").addEventListener("click", () => changeCalendarMonth(1));
