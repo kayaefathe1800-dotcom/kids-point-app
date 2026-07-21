@@ -217,3 +217,19 @@ dialog label input, dialog label select { margin-top: 4px; }
   text-align: right;
   margin-top: 8px;
 }
+
+/* 端末ロール */
+#parent-mode-link {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-sub);
+  text-decoration: underline;
+  margin-top: 16px;
+  cursor: pointer;
+}
+.role-choice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
