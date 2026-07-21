@@ -1043,7 +1043,10 @@ async function init() {
     // これが真の場合だけ、controllerchangeを「新バージョンへの切り替わり」とみなす
     // （初回インストール時にもcontrollerchangeが発火しうるため、誤ってバナーを出さないための判定）
     const hadController = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.register("./sw.js").catch(() => {
+    // updateViaCache: "none" を指定し、sw.js自体をHTTP/CDNキャッシュ経由ではなく
+    // 常にネットワークから取得させる（GitHub PagesのCDNがsw.jsをmax-age=600で
+    // キャッシュしており、これが新バージョン検知の遅延・失敗の原因だったため）
+    navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => {
       // 登録失敗してもアプリ自体は動作する
     });
     navigator.serviceWorker.addEventListener("controllerchange", () => {
