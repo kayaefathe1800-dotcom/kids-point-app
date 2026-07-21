@@ -162,3 +162,18 @@ dialog label input, dialog label select { margin-top: 4px; }
   20% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -90%); }
 }
+
+/* 達成率バー */
+.achievement-bar-wrap { margin-top: 12px; }
+.achievement-label { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-sub); margin-bottom: 4px; }
+.achievement-bar { background: var(--border); border-radius: 999px; height: 8px; overflow: hidden; }
+.achievement-fill { background: var(--success); height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+
+/* カレンダー履歴 */
+.calendar-header { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 8px 0; }
+.calendar-header span { font-weight: 600; min-width: 7em; text-align: center; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.cal-head { text-align: center; font-size: 0.75rem; color: var(--text-sub); font-weight: 600; padding-bottom: 4px; }
+.cal-day { aspect-ratio: 1; display: grid; place-items: center; padding: 0; font-size: 0.85rem; border-radius: 50%; }
+.cal-done { background: var(--success); color: #fff; font-weight: 700; }
+.cal-today { outline: 2px solid var(--primary); outline-offset: -2px; }
