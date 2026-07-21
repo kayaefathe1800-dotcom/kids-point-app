@@ -565,7 +565,7 @@ async function openRewardDialog(rewardId = null) {
   document.getElementById("reward-dialog").showModal();
 }
 
-function saveRewardFromForm(e) {
+async function saveRewardFromForm(e) {
   e.preventDefault();
   const id = document.getElementById("reward-id").value;
   const fields = {
@@ -573,18 +573,40 @@ function saveRewardFromForm(e) {
     cost: Number(document.getElementById("reward-cost").value),
     updatedAt: nowISO(),
   };
-  if (id) {
-    Object.assign(state.rewards.find((r) => r.id === id), fields);
+  if (isCloudMode()) {
+    const existing = id ? state.rewards.find((r) => r.id === id) : null;
+    const reward = existing
+      ? { ...existing, ...fields }
+      : { id: uuid(), ...fields, status: "active", createdAt: nowISO() };
+    try {
+      await cloudUpsertReward(reward);
+      // stateへの反映はRealtime経由
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      return;
+    }
   } else {
-    state.rewards.push({ id: uuid(), ...fields, status: "active", createdAt: nowISO() });
+    if (id) {
+      Object.assign(state.rewards.find((r) => r.id === id), fields);
+    } else {
+      state.rewards.push({ id: uuid(), ...fields, status: "active", createdAt: nowISO() });
+    }
+    saveState();
   }
-  saveState();
   document.getElementById("reward-dialog").close();
   renderAll();
 }
 
 async function archiveReward(id) {
   if (!(await requireParent())) return;
+  if (isCloudMode()) {
+    try {
+      await cloudUpdateRewardStatus(id, "archived");
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+    }
+    return;
+  }
   const r = state.rewards.find((r) => r.id === id);
   r.status = "archived";
   r.updatedAt = nowISO();
@@ -594,6 +616,14 @@ async function archiveReward(id) {
 
 async function restoreReward(id) {
   if (!(await requireParent())) return;
+  if (isCloudMode()) {
+    try {
+      await cloudUpdateRewardStatus(id, "active");
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+    }
+    return;
+  }
   const r = state.rewards.find((r) => r.id === id);
   r.status = "active";
   r.updatedAt = nowISO();
