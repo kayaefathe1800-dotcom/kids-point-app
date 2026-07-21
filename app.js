@@ -386,7 +386,7 @@ function updateTaskFormVisibility() {
   document.getElementById("weekday-fields").hidden = type !== "recurring" || freq !== "weekly";
 }
 
-function saveTaskFromForm(e) {
+async function saveTaskFromForm(e) {
   e.preventDefault();
   const id = document.getElementById("task-id").value;
   const type = document.getElementById("task-type").value;
@@ -406,22 +406,44 @@ function saveTaskFromForm(e) {
     dueDate: type === "oneoff" ? document.getElementById("task-duedate").value : null,
     updatedAt: nowISO(),
   };
-  if (id) {
-    Object.assign(state.tasks.find((t) => t.id === id), fields);
+  if (isCloudMode()) {
+    const existing = id ? state.tasks.find((t) => t.id === id) : null;
+    const task = existing
+      ? { ...existing, ...fields }
+      : { id: uuid(), ...fields, status: "active", createdBy: "parent", createdAt: nowISO(), completions: [] };
+    try {
+      await cloudUpsertTask(task);
+      // stateへの反映はRealtime経由
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      return;
+    }
   } else {
-    state.tasks.push({
-      id: uuid(), ...fields,
-      status: "active", createdBy: "parent",
-      createdAt: nowISO(), completions: [],
-    });
+    if (id) {
+      Object.assign(state.tasks.find((t) => t.id === id), fields);
+    } else {
+      state.tasks.push({
+        id: uuid(), ...fields,
+        status: "active", createdBy: "parent",
+        createdAt: nowISO(), completions: [],
+      });
+    }
+    saveState();
   }
-  saveState();
   document.getElementById("task-dialog").close();
   renderAll();
 }
 
 async function archiveTask(id) {
   if (!(await requireParent())) return;
+  if (isCloudMode()) {
+    try {
+      await cloudUpdateTaskStatus(id, "archived");
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+    }
+    return;
+  }
   const t = state.tasks.find((t) => t.id === id);
   t.status = "archived";
   t.updatedAt = nowISO();
@@ -433,7 +455,16 @@ async function restoreTask(id) {
   if (!(await requireParent())) return;
   const t = state.tasks.find((t) => t.id === id);
   // 完了済み単発タスクの復元は completed に戻す（今日のタスクに再表示しない）
-  t.status = t.type === "oneoff" && t.completions.length > 0 ? "completed" : "active";
+  const newStatus = t.type === "oneoff" && t.completions.length > 0 ? "completed" : "active";
+  if (isCloudMode()) {
+    try {
+      await cloudUpdateTaskStatus(id, newStatus);
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+    }
+    return;
+  }
+  t.status = newStatus;
   t.updatedAt = nowISO();
   saveState();
   renderAll();
