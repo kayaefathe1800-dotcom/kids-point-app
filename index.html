@@ -32,7 +32,11 @@
     </div>
     <h2>今日のタスク</h2>
     <div id="today-tasks"></div>
+    <p id="parent-mode-link" hidden>保護者の方はこちら</p>
+  </section>
 
+  <!-- 履歴 -->
+  <section id="tab-history" class="tab">
     <h2>今月の記録</h2>
     <div class="calendar-header">
       <button id="btn-cal-prev" class="btn-small" aria-label="前の月">←</button>
@@ -121,12 +125,19 @@
           <button id="btn-join-family" class="btn-small">家族コードを入力して参加する</button>
         </div>
       </section>
+      <section class="settings-block">
+        <h3>端末の役割</h3>
+        <p>この端末は現在 <strong id="device-role-label">-</strong> として使われています。</p>
+        <button id="btn-device-role-parent" class="btn-small">保護者用にする</button>
+        <button id="btn-device-role-child" class="btn-small">子ども用にする</button>
+      </section>
     </div>
   </section>
 </main>
 
 <nav id="bottom-nav">
   <button data-tab="home" class="active">🏠<span>ホーム</span></button>
+  <button data-tab="history">📅<span>履歴</span></button>
   <button data-tab="tasks">✅<span>タスク</span></button>
   <button data-tab="rewards">🎁<span>ごほうび</span></button>
   <button data-tab="settings">⚙️<span>設定</span></button>
@@ -193,6 +204,15 @@
   <p id="day-detail-total"></p>
   <div class="dialog-buttons">
     <button type="button" id="btn-day-detail-close">閉じる</button>
+  </div>
+</dialog>
+
+<!-- 端末ロール選択ダイアログ -->
+<dialog id="role-choice-dialog">
+  <h3>この端末はどちらで使いますか？</h3>
+  <div class="role-choice-buttons">
+    <button type="button" id="btn-role-parent" class="btn-primary">保護者用（PINが必要）</button>
+    <button type="button" id="btn-role-child">子ども用</button>
   </div>
 </dialog>
 
