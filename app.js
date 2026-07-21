@@ -475,7 +475,7 @@ function renderRewards() {
 }
 
 // 交換は押した時点で成立。PIN不要（設計書 §4）
-function exchangeReward(id, btn) {
+async function exchangeReward(id, btn) {
   btn.disabled = true; // 連打防止
   recalcPoints();      // 残高を再確認してから減算（設計書の処理ルール）
   const reward = state.rewards.find((r) => r.id === id);
@@ -486,6 +486,17 @@ function exchangeReward(id, btn) {
   }
   if (!confirm(`「${reward.title}」を${reward.cost}ポイントで交換します。\n交換後は取り消せません。`)) {
     renderAll();
+    return;
+  }
+  if (isCloudMode()) {
+    try {
+      await cloudInsertExchange(reward);
+      alert(`「${reward.title}」と交換しました！`);
+      // stateへの反映はRealtime経由
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      renderAll();
+    }
     return;
   }
   addHistory({ type: "exchange", amount: -reward.cost, rewardId: reward.id, title: reward.title });
