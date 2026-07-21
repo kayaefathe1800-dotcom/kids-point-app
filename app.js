@@ -924,6 +924,7 @@ function setupEvents() {
   document.querySelectorAll("#bottom-nav button").forEach((b) => {
     b.addEventListener("click", () => switchTab(b.dataset.tab));
   });
+  document.getElementById("btn-update-reload").addEventListener("click", () => location.reload());
   // ホーム（カレンダー月移動）
   document.getElementById("btn-cal-prev").addEventListener("click", () => changeCalendarMonth(-1));
   document.getElementById("btn-cal-next").addEventListener("click", () => changeCalendarMonth(1));
@@ -987,8 +988,17 @@ async function init() {
     renderAll();
   }
   if ("serviceWorker" in navigator) {
+    // ページ読み込み時点で既に別バージョンのSWに制御されていたかを先に記録する。
+    // これが真の場合だけ、controllerchangeを「新バージョンへの切り替わり」とみなす
+    // （初回インストール時にもcontrollerchangeが発火しうるため、誤ってバナーを出さないための判定）
+    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register("./sw.js").catch(() => {
       // 登録失敗してもアプリ自体は動作する
+    });
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (hadController) {
+        document.getElementById("update-banner").hidden = false;
+      }
     });
   }
 }
