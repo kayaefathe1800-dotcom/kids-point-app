@@ -1,10 +1,11 @@
 // キャッシュ名にバージョンを付与（設計書 §7）。ファイル更新時は v2, v3... に上げる
-const CACHE_NAME = "kids-point-app-v3";
+const CACHE_NAME = "kids-point-app-v4";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./sync.js",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
