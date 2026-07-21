@@ -1101,14 +1101,15 @@ async function init() {
       state = defaultState(); // 画面表示のための最低限の空状態（保存はしない）
     }
     subscribeRealtime(familyCode);
+    applyRoleUI();
     renderAll();
   } else {
     loadState();
     state.settings.lastOpenedDate = todayStr();
     saveState();
+    applyRoleUI();
     renderAll();
   }
-  applyRoleUI();
   if (!getBaseRole()) {
     document.getElementById("role-choice-dialog").showModal();
   }
