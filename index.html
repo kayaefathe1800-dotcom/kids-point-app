@@ -16,9 +16,27 @@
       <div class="points-label">いまのポイント</div>
       <div class="points-value"><span id="home-points">0</span><span class="pt-unit">pt</span></div>
       <div class="next-reward" id="next-reward-hint" hidden></div>
+      <div class="achievement-bar-wrap" id="achievement-wrap" hidden>
+        <div class="achievement-label">
+          <span id="achievement-text">今日 0/0 完了</span>
+          <span id="achievement-pct">0%</span>
+        </div>
+        <div class="achievement-bar">
+          <div class="achievement-fill" id="achievement-fill"></div>
+        </div>
+      </div>
     </div>
     <h2>今日のタスク</h2>
     <div id="today-tasks"></div>
+
+    <h2>今月の記録</h2>
+    <div class="calendar-header">
+      <button id="btn-cal-prev" class="btn-small" aria-label="前の月">←</button>
+      <span id="cal-month-label"></span>
+      <button id="btn-cal-today" class="btn-small">今日</button>
+      <button id="btn-cal-next" class="btn-small" aria-label="次の月">→</button>
+    </div>
+    <div id="home-calendar"></div>
   </section>
 
   <!-- タスク -->
