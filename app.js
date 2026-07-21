@@ -199,7 +199,7 @@ function isTaskForToday(task) {
 }
 
 function isCompletedToday(task) {
-  return task.completions.some((c) => c.date === todayStr());
+  return Array.isArray(task.completions) && task.completions.some((c) => c.date === todayStr());
 }
 
 // ===== タスク完了（設計書 §3「タスク完了処理の詳細」） =====
