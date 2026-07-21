@@ -105,3 +105,84 @@ async function fetchCloudState(familyCode) {
     })),
   };
 }
+
+// ===== クラウド書き込み =====
+async function cloudInsertTaskCompletion(task, completion) {
+  const familyCode = getFamilyCode();
+  const { error } = await sb.from("task_completions").insert({
+    id: uuid(), task_id: task.id, family_code: familyCode,
+    date: completion.date, completed_at: completion.completedAt, points_awarded: completion.pointsAwarded,
+  });
+  if (error) {
+    if (error.code === "23505") return false; // unique制約違反＝他端末が既に完了済み。正常系
+    throw error;
+  }
+  if (task.type === "oneoff") {
+    await sb.from("tasks").update({ status: "completed", updated_at: nowISO() }).eq("id", task.id);
+  }
+  const { error: historyError } = await sb.from("point_history").insert({
+    id: uuid(), family_code: familyCode, type: "task", amount: task.points,
+    task_id: task.id, reward_id: null, title: task.title, note: null,
+    date: completion.date, created_at: completion.completedAt,
+  });
+  if (historyError) throw historyError;
+  return true;
+}
+
+async function cloudInsertExchange(reward) {
+  const familyCode = getFamilyCode();
+  const { error } = await sb.from("point_history").insert({
+    id: uuid(), family_code: familyCode, type: "exchange", amount: -reward.cost,
+    task_id: null, reward_id: reward.id, title: reward.title, note: null,
+    date: todayStr(), created_at: nowISO(),
+  });
+  if (error) throw error;
+}
+
+async function cloudInsertAdjustment(amount, note) {
+  const familyCode = getFamilyCode();
+  const { error } = await sb.from("point_history").insert({
+    id: uuid(), family_code: familyCode, type: "adjustment", amount,
+    task_id: null, reward_id: null, title: "手動調整", note,
+    date: todayStr(), created_at: nowISO(),
+  });
+  if (error) throw error;
+}
+
+async function cloudUpsertTask(task) {
+  const familyCode = getFamilyCode();
+  const { error } = await sb.from("tasks").upsert({
+    id: task.id, family_code: familyCode, title: task.title, points: task.points,
+    type: task.type,
+    frequency: task.type === "recurring" ? task.recurrence.frequency : null,
+    weekdays: task.type === "recurring" ? task.recurrence.weekdays : null,
+    due_date: task.dueDate, status: task.status, created_by: task.createdBy,
+    created_at: task.createdAt, updated_at: task.updatedAt,
+  });
+  if (error) throw error;
+}
+
+async function cloudUpdateTaskStatus(taskId, status) {
+  const { error } = await sb.from("tasks").update({ status, updated_at: nowISO() }).eq("id", taskId);
+  if (error) throw error;
+}
+
+async function cloudUpsertReward(reward) {
+  const familyCode = getFamilyCode();
+  const { error } = await sb.from("rewards").upsert({
+    id: reward.id, family_code: familyCode, title: reward.title, cost: reward.cost,
+    status: reward.status, created_at: reward.createdAt, updated_at: reward.updatedAt,
+  });
+  if (error) throw error;
+}
+
+async function cloudUpdateRewardStatus(rewardId, status) {
+  const { error } = await sb.from("rewards").update({ status, updated_at: nowISO() }).eq("id", rewardId);
+  if (error) throw error;
+}
+
+async function cloudUpdateSettings(fields) {
+  const familyCode = getFamilyCode();
+  const { error } = await sb.from("family_settings").update({ ...fields, updated_at: nowISO() }).eq("family_code", familyCode);
+  if (error) throw error;
+}
