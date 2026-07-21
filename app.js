@@ -258,7 +258,7 @@ function renderHome() {
   }
   // 達成率・カレンダーは「今日のタスクなし」の早期returnより前に描画する
   // （today-tasks欄の中身とは独立して、常に表示・更新されるべきもののため）
-  renderAchievement(todo.length, done.length);
+  renderAchievement(todo, done);
   renderCalendar();
   if (todo.length === 0 && done.length === 0) {
     container.innerHTML = '<p class="empty">今日のタスクはありません</p>';
@@ -314,19 +314,20 @@ function renderNextRewardHint() {
   el.textContent = `あと ${nearest.cost - state.points}pt で「${nearest.title}」と交換できる`;
 }
 
-// ===== 達成率表示（今日のタスク進捗） =====
-function renderAchievement(todoCount, doneCount) {
-  const totalCount = todoCount + doneCount;
+// ===== 達成率表示（今日のタスク進捗。ポイント基準） =====
+function renderAchievement(todoTasks, doneTasks) {
+  const totalPoints = [...todoTasks, ...doneTasks].reduce((sum, t) => sum + t.points, 0);
+  const earnedPoints = doneTasks.reduce((sum, t) => sum + t.points, 0);
   const wrap = document.getElementById("achievement-wrap");
-  if (totalCount === 0) {
+  if (totalPoints === 0) {
     wrap.hidden = true;
     return;
   }
   wrap.hidden = false;
-  // done.length は理論上totalCountを超えないが、念のため上限処理する
-  const clampedDone = Math.min(doneCount, totalCount);
-  const percentage = Math.round((clampedDone / totalCount) * 100);
-  document.getElementById("achievement-text").textContent = `今日 ${clampedDone}/${totalCount} 完了`;
+  // earnedPoints は理論上totalPointsを超えないが、念のため上限処理する
+  const clampedEarned = Math.min(earnedPoints, totalPoints);
+  const percentage = Math.round((clampedEarned / totalPoints) * 100);
+  document.getElementById("achievement-text").textContent = `今日 ${clampedEarned}/${totalPoints}pt 獲得`;
   document.getElementById("achievement-pct").textContent = `${percentage}%`;
   document.getElementById("achievement-fill").style.width = `${percentage}%`;
 }
@@ -337,13 +338,18 @@ function formatLocalDate(year, month, day) {
   return [year, String(month + 1).padStart(2, "0"), String(day).padStart(2, "0")].join("-");
 }
 
+function formatDisplayDate(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return `${y}年${m}月${d}日`;
+}
+
 function renderCalendar() {
   const year = calendarYear;
   const month = calendarMonth; // 0-indexed
   document.getElementById("cal-month-label").textContent = `${year}年${month + 1}月`;
 
   const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-  const completedDates = new Set();
+  const pointsByDate = new Map(); // date -> その日の獲得ポイント合計
   for (const task of state.tasks || []) {
     // completionsが配列でない（古い・破損データ等の）場合でもカレンダー描画を止めない
     const completions = Array.isArray(task.completions) ? task.completions : [];
@@ -351,7 +357,8 @@ function renderCalendar() {
       // c.dateは通常"YYYY-MM-DD"形式だが、形式が壊れていても無視するだけにする
       const completionDate = String(c?.date || "").slice(0, 10);
       if (/^\d{4}-\d{2}-\d{2}$/.test(completionDate) && completionDate.startsWith(monthPrefix)) {
-        completedDates.add(completionDate);
+        const awarded = Number(c?.pointsAwarded) || 0;
+        pointsByDate.set(completionDate, (pointsByDate.get(completionDate) || 0) + awarded);
       }
     }
   }
@@ -367,11 +374,44 @@ function renderCalendar() {
   for (let i = 0; i < firstDay; i++) cells += "<div></div>";
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = formatLocalDate(year, month, d);
-    const done = completedDates.has(dateStr);
+    const dayPoints = pointsByDate.get(dateStr) || 0;
     const isToday = dateStr === today;
-    cells += `<div class="cal-day${done ? " cal-done" : ""}${isToday ? " cal-today" : ""}">${d}</div>`;
+    cells += `<div class="cal-day${dayPoints > 0 ? " cal-done" : ""}${isToday ? " cal-today" : ""}" data-date="${dateStr}">` +
+      `<span class="cal-day-num">${d}</span>` +
+      (dayPoints > 0 ? `<span class="cal-day-pts">${dayPoints}pt</span>` : "") +
+      `</div>`;
   }
   document.getElementById("home-calendar").innerHTML = `<div class="cal-grid">${cells}</div>`;
+}
+
+// ===== カレンダー日別内訳ダイアログ =====
+function showDayDetail(dateStr) {
+  const items = [];
+  let total = 0;
+  for (const task of state.tasks || []) {
+    const completions = Array.isArray(task.completions) ? task.completions : [];
+    for (const c of completions) {
+      const completionDate = String(c?.date || "").slice(0, 10);
+      if (completionDate === dateStr) {
+        const pts = Number(c?.pointsAwarded) || 0;
+        items.push({ title: task.title, points: pts });
+        total += pts;
+      }
+    }
+  }
+  if (items.length === 0) return; // 実績のない日はタップしても何も起きない
+  document.getElementById("day-detail-title").textContent = formatDisplayDate(dateStr);
+  const list = document.getElementById("day-detail-list");
+  list.innerHTML = "";
+  for (const item of items) {
+    const div = document.createElement("div");
+    div.className = "list-item";
+    div.innerHTML =
+      `<div class="item-main">「${escapeHtml(item.title)}」達成で <span class="plus">${item.points}pt</span> ゲット</div>`;
+    list.append(div);
+  }
+  document.getElementById("day-detail-total").textContent = `合計: ${total}pt`;
+  document.getElementById("day-detail-dialog").showModal();
 }
 
 function changeCalendarMonth(delta) {
