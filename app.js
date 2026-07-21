@@ -140,7 +140,17 @@ async function changePin() {
     alert("一致しません");
     return;
   }
-  state.settings.parentPinHash = await hashPin(p1);
+  const hash = await hashPin(p1);
+  if (isCloudMode()) {
+    try {
+      await cloudUpdateSettings({ parent_pin_hash: hash });
+      alert("PINを設定しました");
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+    }
+    return;
+  }
+  state.settings.parentPinHash = hash;
   saveState();
   alert("PINを設定しました");
 }
@@ -684,20 +694,39 @@ function renderPointHistory() {
   }
 }
 
-function saveChildName() {
-  state.settings.childName = document.getElementById("child-name").value.trim();
+async function saveChildName() {
+  const name = document.getElementById("child-name").value.trim();
+  if (isCloudMode()) {
+    try {
+      await cloudUpdateSettings({ child_name: name });
+      alert("保存しました");
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+    }
+    return;
+  }
+  state.settings.childName = name;
   saveState();
   alert("保存しました");
 }
 
-function adjustPoints() {
+async function adjustPoints() {
   const amount = Number(document.getElementById("adjust-amount").value);
   const note = document.getElementById("adjust-note").value.trim();
   if (!amount) { alert("ポイント数を入力してください"); return; }
   if (!note) { alert("理由を入力してください"); return; }
-  addHistory({ type: "adjustment", amount, title: "手動調整", note });
-  saveState();
-  renderAll();
+  if (isCloudMode()) {
+    try {
+      await cloudInsertAdjustment(amount, note);
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      return;
+    }
+  } else {
+    addHistory({ type: "adjustment", amount, title: "手動調整", note });
+    saveState();
+    renderAll();
+  }
   document.getElementById("adjust-amount").value = "";
   document.getElementById("adjust-note").value = "";
 }
