@@ -242,6 +242,72 @@ function renderDeviceRoleSetting() {
     effectiveRole() === "parent" ? "保護者用" : "子ども用";
 }
 
+// ===== ログインボーナス =====
+const LOGIN_BONUS_SCHEDULE = [5, 10, 15, 20, 25, 30, 50]; // 1日目〜7日目。7日目の翌日は1日目に戻る
+
+// dateStrに対してdelta日を加減算する。toISOString()はUTC基準のため使用禁止（設計書 §3と同じ理由）
+function addDays(dateStr, delta) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + delta);
+  return formatLocalDate(dt.getFullYear(), dt.getMonth(), dt.getDate());
+}
+
+// 「today」より前に何日連続でlogin種別の受け取りがあるかを数える
+function calcLoginStreak(pointHistory, today) {
+  const loginDates = new Set(
+    (Array.isArray(pointHistory) ? pointHistory : [])
+      .filter((h) => h && h.type === "login")
+      .map((h) => String(h.date || "").slice(0, 10))
+  );
+  let consecutive = 0;
+  let cursor = addDays(today, -1);
+  while (loginDates.has(cursor)) {
+    consecutive++;
+    cursor = addDays(cursor, -1);
+  }
+  return consecutive;
+}
+
+// 連続日数から「何日目か」と付与額を算出する
+function loginBonusAmount(consecutive) {
+  const cycleDay = (consecutive % 7) + 1;
+  return { cycleDay, amount: LOGIN_BONUS_SCHEDULE[cycleDay - 1] };
+}
+
+function hasClaimedLoginBonusToday() {
+  const today = todayStr();
+  return (Array.isArray(state.pointHistory) ? state.pointHistory : []).some(
+    (h) => h && h.type === "login" && String(h.date || "").slice(0, 10) === today
+  );
+}
+
+function showLoginBonusDialog() {
+  const consecutive = calcLoginStreak(state.pointHistory, todayStr());
+  const { cycleDay, amount } = loginBonusAmount(consecutive);
+  document.getElementById("login-bonus-day").textContent = `${cycleDay}日目`;
+  document.getElementById("login-bonus-amount").textContent = `+${amount}pt`;
+  document.getElementById("login-bonus-dialog").showModal();
+}
+
+async function claimLoginBonus() {
+  const consecutive = calcLoginStreak(state.pointHistory, todayStr());
+  const { amount } = loginBonusAmount(consecutive);
+  if (isCloudMode()) {
+    try {
+      await cloudInsertLoginBonus(amount);
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      return;
+    }
+  } else {
+    addHistory({ type: "login", amount, title: "ログインボーナス" });
+    saveState();
+    renderAll();
+  }
+  document.getElementById("login-bonus-dialog").close();
+  showPointGain(amount);
+}
+
 // ===== タブ切り替え =====
 function switchTab(name) {
   const current = document.querySelector("#bottom-nav button.active");
@@ -867,7 +933,7 @@ function renderPointHistory() {
     container.innerHTML = '<p class="empty">履歴がありません</p>';
     return;
   }
-  const typeLabel = { task: "タスク", exchange: "交換", adjustment: "調整" };
+  const typeLabel = { task: "タスク", exchange: "交換", adjustment: "調整", login: "ログインボーナス" };
   for (const h of [...state.pointHistory].reverse()) {
     const div = document.createElement("div");
     div.className = "list-item";
