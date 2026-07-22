@@ -340,6 +340,7 @@ function switchTab(name) {
 
 // ===== タスク判定（リセット処理なし・その場判定。設計書 §3） =====
 function isTaskForToday(task) {
+  if (task.status === "pending_grant") return true; // ポイント付与待ちの間も表示し続ける
   if (task.status !== "active") return false;
   if (task.type === "oneoff") return task.dueDate !== null && task.dueDate <= todayStr();
   if (task.recurrence.frequency === "daily") return true;
@@ -348,6 +349,48 @@ function isTaskForToday(task) {
 
 function isCompletedToday(task) {
   return Array.isArray(task.completions) && task.completions.some((c) => c.date === todayStr());
+}
+
+// ===== 子どものタスク追加（設計書 §3〜4） =====
+// 未完了（active/pending_grant）の子ども作成タスク数。5件が上限
+function countActiveChildTasks() {
+  return state.tasks.filter(
+    (t) => t.createdBy === "child" && (t.status === "active" || t.status === "pending_grant")
+  ).length;
+}
+
+function openChildTaskDialog() {
+  if (countActiveChildTasks() >= 5) {
+    alert("自分で追加できるタスクは同時に5つまでです。ポイントをもらってから追加してね");
+    return;
+  }
+  document.getElementById("child-task-title").value = "";
+  document.getElementById("child-task-dialog").showModal();
+}
+
+async function saveChildTaskFromForm(e) {
+  e.preventDefault();
+  const title = document.getElementById("child-task-title").value.trim();
+  const task = {
+    id: uuid(), title, points: 0, type: "oneoff",
+    recurrence: null, dueDate: todayStr(),
+    status: "active", createdBy: "child",
+    createdAt: nowISO(), updatedAt: nowISO(), completions: [],
+  };
+  if (isCloudMode()) {
+    try {
+      await cloudUpsertTask(task);
+      // stateへの反映はRealtime経由
+    } catch (err) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      return;
+    }
+  } else {
+    state.tasks.push(task);
+    saveState();
+  }
+  document.getElementById("child-task-dialog").close();
+  renderAll();
 }
 
 // ===== タスク完了（設計書 §3「タスク完了処理の詳細」） =====
