@@ -203,6 +203,7 @@ function applyRoleUI() {
   document.querySelector('#bottom-nav button[data-tab="settings"]').hidden = !isParent;
   document.getElementById("parent-mode-link").hidden = isParent;
   document.getElementById("btn-add-reward").hidden = !isParent;
+  document.getElementById("btn-add-child-task").hidden = isParent;
   const current = document.querySelector("#bottom-nav button.active");
   if (current && current.hidden) {
     switchTab("home");
@@ -1262,6 +1263,12 @@ function setupEvents() {
   });
   document.getElementById("btn-day-detail-close").addEventListener("click", () => {
     document.getElementById("day-detail-dialog").close();
+  });
+  // ホーム: 子どものタスク追加
+  document.getElementById("btn-add-child-task").addEventListener("click", openChildTaskDialog);
+  document.getElementById("child-task-form").addEventListener("submit", saveChildTaskFromForm);
+  document.getElementById("btn-child-task-cancel").addEventListener("click", () => {
+    document.getElementById("child-task-dialog").close();
   });
   // タスク
   document.getElementById("btn-add-task").addEventListener("click", () => openTaskDialog());
