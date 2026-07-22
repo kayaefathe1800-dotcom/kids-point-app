@@ -370,6 +370,8 @@ function openChildTaskDialog() {
 
 async function saveChildTaskFromForm(e) {
   e.preventDefault();
+  const btn = document.querySelector('#child-task-form button[type="submit"]');
+  btn.disabled = true; // 連打防止（クラウド書き込み中の二重送信で上限をすり抜けるのを防ぐ）
   const title = document.getElementById("child-task-title").value.trim();
   const task = {
     id: uuid(), title, points: 0, type: "oneoff",
@@ -383,12 +385,14 @@ async function saveChildTaskFromForm(e) {
       // stateへの反映はRealtime経由
     } catch (err) {
       alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      btn.disabled = false; // 失敗時は再試行できるようにする
       return;
     }
   } else {
     state.tasks.push(task);
     saveState();
   }
+  btn.disabled = false;
   document.getElementById("child-task-dialog").close();
   renderAll();
 }
