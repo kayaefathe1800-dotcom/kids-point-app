@@ -290,6 +290,8 @@ function showLoginBonusDialog() {
 }
 
 async function claimLoginBonus() {
+  const btn = document.getElementById("btn-login-bonus-claim");
+  btn.disabled = true; // 連打防止（設計書の他の非同期ポイント処理と同じ方針）
   const consecutive = calcLoginStreak(state.pointHistory, todayStr());
   const { amount } = loginBonusAmount(consecutive);
   if (isCloudMode()) {
@@ -297,6 +299,7 @@ async function claimLoginBonus() {
       await cloudInsertLoginBonus(amount);
     } catch (e) {
       alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      btn.disabled = false; // 失敗時は再試行できるようにする
       return;
     }
   } else {
