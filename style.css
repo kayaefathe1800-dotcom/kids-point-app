@@ -80,6 +80,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .toggle-row { display: flex; gap: 16px; margin: 10px 0; font-size: 0.9rem; }
+.toggle-row[hidden] { display: none; }
 .form-row { display: flex; gap: 8px; }
 .form-row input { flex: 1; }
 

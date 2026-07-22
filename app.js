@@ -197,11 +197,20 @@ function effectiveRole() {
 }
 
 // 有効ロールに応じてボトムナビの表示/非表示を切り替える
+// 注意: ロール切り替え箇所（init/chooseRole/requestParentOverride/setDeviceRole）
+// からのみ呼ぶこと。汎用の再描画パスから呼ぶと、ユーザーが選択中の
+// 「アーカイブ済み」表示を意図せず「有効」に戻してしまう
 function applyRoleUI() {
   const isParent = effectiveRole() === "parent";
   document.querySelector('#bottom-nav button[data-tab="tasks"]').hidden = !isParent;
   document.querySelector('#bottom-nav button[data-tab="settings"]').hidden = !isParent;
   document.getElementById("parent-mode-link").hidden = isParent;
+  document.getElementById("reward-view-toggle").hidden = !isParent;
+  if (!isParent) {
+    // 子どもロールでは「有効」表示に固定する（アーカイブ済み表示のまま
+    // トグルが隠れてリストが空に見えてしまうのを防ぐ）
+    document.querySelector('input[name="reward-view"][value="active"]').checked = true;
+  }
   const current = document.querySelector("#bottom-nav button.active");
   if (current && current.hidden) {
     switchTab("home");
