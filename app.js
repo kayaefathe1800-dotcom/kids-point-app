@@ -225,7 +225,9 @@ async function requestParentOverride() {
   if (!(await requireParent())) return;
   sessionRoleOverride = true;
   applyRoleUI();
-  switchTab("settings");
+  switchTab("settings"); // switchTab()は副作用としてparentUnlockedをfalseに戻すため、直後に再設定する
+  parentUnlocked = true;
+  renderSettings();
 }
 
 // 設定タブ内での端末ロールの明示的な切り替え（設定タブ自体が既にPIN解除済みの文脈なので追加のPIN確認は不要）

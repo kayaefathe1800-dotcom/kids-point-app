@@ -126,6 +126,7 @@ input[type="text"], input[type="number"], input[type="date"], select {
   align-items: center;
   gap: 2px;
 }
+#bottom-nav button[hidden] { display: none; }
 #bottom-nav button span { font-size: 0.65rem; }
 #bottom-nav button.active { color: var(--primary); font-weight: 700; }
 
