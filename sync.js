@@ -149,6 +149,19 @@ async function cloudInsertAdjustment(amount, note) {
   if (error) throw error;
 }
 
+// 注意: 同じ日に複数の子どもロール端末がほぼ同時に開いた場合、Realtime同期の
+// 反映が間に合わず二重付与される可能性がある（DBのユニーク制約は設けていない）。
+// 1家族での利用を前提とした低頻度・低リスクな既知の制約として許容する。
+async function cloudInsertLoginBonus(amount) {
+  const familyCode = getFamilyCode();
+  const { error } = await sb.from("point_history").insert({
+    id: uuid(), family_code: familyCode, type: "login", amount,
+    task_id: null, reward_id: null, title: "ログインボーナス", note: null,
+    date: todayStr(), created_at: nowISO(),
+  });
+  if (error) throw error;
+}
+
 async function cloudUpsertTask(task) {
   const familyCode = getFamilyCode();
   const { error } = await sb.from("tasks").upsert({
