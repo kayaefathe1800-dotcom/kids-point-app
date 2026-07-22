@@ -29,6 +29,7 @@
     </div>
     <h2>今日のタスク</h2>
     <div id="today-tasks"></div>
+    <button id="btn-add-child-task" class="btn-small" hidden>＋ 自分でタスクを追加</button>
     <p id="parent-mode-link" hidden>保護者の方はこちら</p>
   </section>
 
@@ -54,6 +55,8 @@
       <label><input type="radio" name="task-view" value="active" checked> 有効</label>
       <label><input type="radio" name="task-view" value="archived"> アーカイブ済み</label>
     </div>
+    <h3>ポイント付与待ち</h3>
+    <div id="pending-grant-list"></div>
     <h3>繰り返し</h3>
     <div id="recurring-tasks"></div>
     <h3>単発</h3>
@@ -172,6 +175,18 @@
     <div class="dialog-buttons">
       <button type="button" id="btn-task-cancel">キャンセル</button>
       <button type="submit" class="btn-primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 子ども自身のタスク追加ダイアログ -->
+<dialog id="child-task-dialog">
+  <form id="child-task-form">
+    <h3>自分でタスクを追加</h3>
+    <label>タイトル <input id="child-task-title" type="text" required maxlength="40"></label>
+    <div class="dialog-buttons">
+      <button type="button" id="btn-child-task-cancel">キャンセル</button>
+      <button type="submit" class="btn-primary">追加する</button>
     </div>
   </form>
 </dialog>
