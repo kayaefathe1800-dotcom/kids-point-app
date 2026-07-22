@@ -219,6 +219,15 @@ dialog label input, dialog label select { margin-top: 4px; }
   margin-top: 8px;
 }
 
+/* ログインボーナスダイアログ */
+#login-bonus-dialog {
+  text-align: center;
+}
+#login-bonus-day {
+  color: var(--text-sub);
+  margin-top: 4px;
+}
+
 /* 端末ロール */
 #parent-mode-link {
   text-align: center;
