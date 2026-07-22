@@ -688,8 +688,10 @@ function renderRewards() {
       ex.disabled = state.points < reward.cost; // 残高不足なら無効
       ex.addEventListener("click", () => exchangeReward(reward.id, ex));
       buttons.append(ex);
-      buttons.append(smallButton("編集", () => openRewardDialog(reward.id)));
-      buttons.append(smallButton("アーカイブ", () => archiveReward(reward.id)));
+      if (effectiveRole() === "parent") {
+        buttons.append(smallButton("編集", () => openRewardDialog(reward.id)));
+        buttons.append(smallButton("アーカイブ", () => archiveReward(reward.id)));
+      }
     } else {
       buttons.append(smallButton("復元", () => restoreReward(reward.id)));
     }
