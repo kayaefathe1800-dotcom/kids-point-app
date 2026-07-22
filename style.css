@@ -137,6 +137,11 @@ dialog {
   border-radius: 12px;
   padding: 20px;
   width: min(92vw, 420px);
+  /* ネイティブdialogの中央寄せはUAスタイルのmargin:autoに依存するが、
+     ファイル先頭の * { margin: 0; } リセットに上書きされてしまうため明示的に指定する */
+  position: fixed;
+  inset: 0;
+  margin: auto;
 }
 dialog::backdrop { background: rgba(0,0,0,0.4); }
 dialog h3 { color: var(--text); margin-bottom: 12px; }
@@ -183,35 +188,6 @@ dialog label input, dialog label select { margin-top: 4px; }
 .cal-done { background: var(--success); color: #fff; font-weight: 700; }
 .cal-today { outline: 2px solid var(--primary); outline-offset: -2px; }
 
-/* アップデート通知バナー */
-#update-banner {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  /* iPhoneのノッチ・ステータスバー分の安全領域を確保し、
-     Safari自身のUIとタップ範囲が重ならないようにする */
-  padding-top: env(safe-area-inset-top, 0);
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  background: var(--primary);
-  color: #fff;
-  padding-left: 12px;
-  padding-right: 12px;
-  padding-bottom: 10px;
-  font-size: 0.9rem;
-  cursor: pointer; /* バナー全体をタップ可能にする */
-}
-#update-banner button {
-  background: #fff;
-  color: var(--primary);
-  border-color: #fff;
-  min-height: 40px; /* モバイルでの誤タップを防ぐため十分なタップ領域を確保 */
-  padding: 8px 16px;
-  font-weight: 600;
-}
-
 /* カレンダー日別内訳ダイアログ */
 #day-detail-total {
   font-weight: 600;
@@ -227,6 +203,15 @@ dialog label input, dialog label select { margin-top: 4px; }
 #login-bonus-day {
   color: var(--text-sub);
   margin-top: 4px;
+}
+
+/* 連続ログイン日数バッジ */
+.streak-badge {
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 10px;
 }
 
 /* 端末ロール */

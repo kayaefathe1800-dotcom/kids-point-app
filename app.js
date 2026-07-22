@@ -196,21 +196,13 @@ function effectiveRole() {
   return getBaseRole() || "child";
 }
 
-// 有効ロールに応じてボトムナビの表示/非表示を切り替える
-// 注意: ロール切り替え箇所（init/chooseRole/requestParentOverride/setDeviceRole）
-// からのみ呼ぶこと。汎用の再描画パスから呼ぶと、ユーザーが選択中の
-// 「アーカイブ済み」表示を意図せず「有効」に戻してしまう
+// 有効ロールに応じてボトムナビ・ごほうびタブの表示/非表示を切り替える
 function applyRoleUI() {
   const isParent = effectiveRole() === "parent";
   document.querySelector('#bottom-nav button[data-tab="tasks"]').hidden = !isParent;
   document.querySelector('#bottom-nav button[data-tab="settings"]').hidden = !isParent;
   document.getElementById("parent-mode-link").hidden = isParent;
-  document.getElementById("reward-view-toggle").hidden = !isParent;
-  if (!isParent) {
-    // 子どもロールでは「有効」表示に固定する（アーカイブ済み表示のまま
-    // トグルが隠れてリストが空に見えてしまうのを防ぐ）
-    document.querySelector('input[name="reward-view"][value="active"]').checked = true;
-  }
+  document.getElementById("btn-add-reward").hidden = !isParent;
   const current = document.querySelector("#bottom-nav button.active");
   if (current && current.hidden) {
     switchTab("home");
@@ -288,6 +280,19 @@ function hasClaimedLoginBonusToday() {
   return (Array.isArray(state.pointHistory) ? state.pointHistory : []).some(
     (h) => h && h.type === "login" && String(h.date || "").slice(0, 10) === today
   );
+}
+
+// ホーム上部に「今日は連続何日目か」を表示する。今日分を未受領なら何も表示しない
+function renderLoginStreakBadge() {
+  const badge = document.getElementById("login-streak-badge");
+  if (!hasClaimedLoginBonusToday()) {
+    badge.hidden = true;
+    return;
+  }
+  const consecutive = calcLoginStreak(state.pointHistory, todayStr());
+  const { cycleDay } = loginBonusAmount(consecutive);
+  badge.textContent = `🔥 ログイン連続${cycleDay}日目`;
+  badge.hidden = false;
 }
 
 function showLoginBonusDialog() {
@@ -390,6 +395,7 @@ function renderAll() {
   renderSettings();
 }
 function renderHome() {
+  renderLoginStreakBadge();
   document.getElementById("home-points").textContent = state.points;
   renderNextRewardHint();
   const container = document.getElementById("today-tasks");
@@ -744,12 +750,10 @@ async function restoreTask(id) {
 }
 // ===== ごほうび =====
 function renderRewards() {
-  const view = document.querySelector('input[name="reward-view"]:checked').value;
   const list = document.getElementById("reward-list");
   list.innerHTML = "";
   for (const reward of state.rewards) {
-    const archived = reward.status === "archived";
-    if (view === "active" ? archived : !archived) continue;
+    if (reward.status === "archived") continue; // アーカイブ済みは一覧に出さない（復元導線はUIから撤去済み）
     const div = document.createElement("div");
     div.className = "list-item";
     const main = document.createElement("div");
@@ -759,19 +763,15 @@ function renderRewards() {
       `<div class="item-sub">${reward.cost}pt</div>`;
     div.append(main);
     const buttons = document.createElement("div");
-    if (view === "active") {
-      const ex = document.createElement("button");
-      ex.className = "btn-primary btn-small";
-      ex.textContent = "交換する";
-      ex.disabled = state.points < reward.cost; // 残高不足なら無効
-      ex.addEventListener("click", () => exchangeReward(reward.id, ex));
-      buttons.append(ex);
-      if (effectiveRole() === "parent") {
-        buttons.append(smallButton("編集", () => openRewardDialog(reward.id)));
-        buttons.append(smallButton("アーカイブ", () => archiveReward(reward.id)));
-      }
-    } else {
-      buttons.append(smallButton("復元", () => restoreReward(reward.id)));
+    const ex = document.createElement("button");
+    ex.className = "btn-primary btn-small";
+    ex.textContent = "交換する";
+    ex.disabled = state.points < reward.cost; // 残高不足なら無効
+    ex.addEventListener("click", () => exchangeReward(reward.id, ex));
+    buttons.append(ex);
+    if (effectiveRole() === "parent") {
+      buttons.append(smallButton("編集", () => openRewardDialog(reward.id)));
+      buttons.append(smallButton("アーカイブ", () => archiveReward(reward.id)));
     }
     div.append(buttons);
     list.append(div);
@@ -889,22 +889,6 @@ async function archiveReward(id) {
   renderAll();
 }
 
-async function restoreReward(id) {
-  if (!(await requireParent())) return;
-  if (isCloudMode()) {
-    try {
-      await cloudUpdateRewardStatus(id, "active");
-    } catch (e) {
-      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
-    }
-    return;
-  }
-  const r = state.rewards.find((r) => r.id === id);
-  r.status = "active";
-  r.updatedAt = nowISO();
-  saveState();
-  renderAll();
-}
 // ===== 設定 =====
 function renderSettings() {
   const locked = !parentUnlocked;
@@ -1110,8 +1094,6 @@ function setupEvents() {
   document.querySelectorAll("#bottom-nav button").forEach((b) => {
     b.addEventListener("click", () => switchTab(b.dataset.tab));
   });
-  // ボタンだけでなくバナー全体をタップしても反応するようにする（モバイルでの誤タップ対策）
-  document.getElementById("update-banner").addEventListener("click", () => location.reload());
   // ホーム（カレンダー月移動）
   document.getElementById("btn-cal-prev").addEventListener("click", () => changeCalendarMonth(-1));
   document.getElementById("btn-cal-next").addEventListener("click", () => changeCalendarMonth(1));
@@ -1142,9 +1124,6 @@ function setupEvents() {
   document.getElementById("reward-form").addEventListener("submit", saveRewardFromForm);
   document.getElementById("btn-reward-cancel").addEventListener("click", () => {
     document.getElementById("reward-dialog").close();
-  });
-  document.querySelectorAll('input[name="reward-view"]').forEach((r) => {
-    r.addEventListener("change", renderRewards);
   });
   // 設定
   document.getElementById("btn-create-family").addEventListener("click", handleCreateFamily);
@@ -1200,20 +1179,11 @@ async function init() {
     showLoginBonusDialog();
   }
   if ("serviceWorker" in navigator) {
-    // ページ読み込み時点で既に別バージョンのSWに制御されていたかを先に記録する。
-    // これが真の場合だけ、controllerchangeを「新バージョンへの切り替わり」とみなす
-    // （初回インストール時にもcontrollerchangeが発火しうるため、誤ってバナーを出さないための判定）
-    const hadController = !!navigator.serviceWorker.controller;
     // updateViaCache: "none" を指定し、sw.js自体をHTTP/CDNキャッシュ経由ではなく
     // 常にネットワークから取得させる（GitHub PagesのCDNがsw.jsをmax-age=600で
-    // キャッシュしており、これが新バージョン検知の遅延・失敗の原因だったため）
+    // キャッシュしており、新バージョン検知の遅延・失敗の原因になっていたため）
     navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => {
       // 登録失敗してもアプリ自体は動作する
-    });
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (hadController) {
-        document.getElementById("update-banner").hidden = false;
-      }
     });
   }
 }

@@ -9,13 +9,10 @@
 <meta name="theme-color" content="#2b6cb0">
 </head>
 <body>
-<div id="update-banner" hidden>
-  <span>新しいバージョンがあります</span>
-  <button id="btn-update-reload" class="btn-small">更新する</button>
-</div>
 <main>
   <!-- ホーム -->
   <section id="tab-home" class="tab active">
+    <p id="login-streak-badge" class="streak-badge" hidden></p>
     <div class="points-card">
       <div class="points-label">いまのポイント</div>
       <div class="points-value"><span id="home-points">0</span><span class="pt-unit">pt</span></div>
@@ -68,10 +65,6 @@
     <div class="section-header">
       <h2>ごほうび</h2>
       <button id="btn-add-reward" class="btn-primary">＋ 追加</button>
-    </div>
-    <div class="toggle-row" id="reward-view-toggle">
-      <label><input type="radio" name="reward-view" value="active" checked> 有効</label>
-      <label><input type="radio" name="reward-view" value="archived"> アーカイブ済み</label>
     </div>
     <div id="reward-list"></div>
     <h3>交換履歴</h3>
