@@ -1156,6 +1156,8 @@ function setupEvents() {
   document.getElementById("parent-mode-link").addEventListener("click", requestParentOverride);
   document.getElementById("btn-device-role-parent").addEventListener("click", () => setDeviceRole("parent"));
   document.getElementById("btn-device-role-child").addEventListener("click", () => setDeviceRole("child"));
+  // ログインボーナス
+  document.getElementById("btn-login-bonus-claim").addEventListener("click", claimLoginBonus);
 }
 
 // ===== 初期化 =====
@@ -1182,6 +1184,8 @@ async function init() {
   }
   if (!getBaseRole()) {
     document.getElementById("role-choice-dialog").showModal();
+  } else if (getBaseRole() === "child" && !hasClaimedLoginBonusToday()) {
+    showLoginBonusDialog();
   }
   if ("serviceWorker" in navigator) {
     // ページ読み込み時点で既に別バージョンのSWに制御されていたかを先に記録する。
