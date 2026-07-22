@@ -426,6 +426,56 @@ async function completeTask(taskId, btn) {
   renderAll();
 }
 
+// 子ども作成タスク専用の完了処理。ポイントは付与しない（保護者が後から付与する）
+async function markChildTaskDone(taskId, btn) {
+  btn.disabled = true; // 連打防止
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task || task.status !== "active") return;
+  if (isCloudMode()) {
+    try {
+      await cloudUpdateTaskStatus(taskId, "pending_grant");
+      // stateへの反映はRealtime経由
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      btn.disabled = false;
+    }
+    return;
+  }
+  task.status = "pending_grant";
+  task.updatedAt = nowISO();
+  saveState();
+  renderAll();
+}
+
+// 保護者がポイント付与待ちのタスクに金額を決めて確定させる（承認/却下の審査ではない）
+async function grantChildTaskPoints(taskId, points, btn) {
+  btn.disabled = true; // 連打防止
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task || task.status !== "pending_grant") return;
+  const date = task.updatedAt.slice(0, 10); // 子どもが「やった！」を押した日
+  const completion = { date, completedAt: task.updatedAt, pointsAwarded: points };
+  if (isCloudMode()) {
+    try {
+      // 既存のcloudInsertTaskCompletionをそのまま再利用する。
+      // task.pointsを付与額で上書きしたコピーを渡すことで、内部のpoint_history書き込みが
+      // 正しい金額になる（新しいクラウド関数は追加しない）
+      await cloudInsertTaskCompletion({ ...task, points }, completion);
+      // stateへの反映はRealtime経由
+    } catch (e) {
+      alert("ネットに繋がっていません。接続後にもう一度お試しください。");
+      btn.disabled = false;
+    }
+    return;
+  }
+  task.completions.push(completion);
+  task.points = points;
+  task.status = "completed";
+  task.updatedAt = nowISO();
+  addHistory({ type: "task", amount: points, taskId: task.id, title: task.title });
+  saveState();
+  renderAll();
+}
+
 function showPointGain(points) {
   const el = document.createElement("div");
   el.className = "point-gain";
@@ -447,26 +497,28 @@ function renderHome() {
   renderNextRewardHint();
   const container = document.getElementById("today-tasks");
   container.innerHTML = "";
-  const todo = [], done = [];
+  const todo = [], done = [], pendingGrant = [];
   for (const task of state.tasks) {
     if (!isTaskForToday(task)) continue;
+    if (task.status === "pending_grant") { pendingGrant.push(task); continue; }
     (isCompletedToday(task) ? done : todo).push(task);
   }
   // 達成率・カレンダーは「今日のタスクなし」の早期returnより前に描画する
   // （today-tasks欄の中身とは独立して、常に表示・更新されるべきもののため）
   renderAchievement(todo, done);
   renderCalendar();
-  if (todo.length === 0 && done.length === 0) {
+  if (todo.length === 0 && done.length === 0 && pendingGrant.length === 0) {
     container.innerHTML = '<p class="empty">今日のタスクはありません</p>';
     return;
   }
-  if (todo.length === 0) {
+  if (todo.length === 0 && pendingGrant.length === 0) {
     const p = document.createElement("p");
     p.className = "all-done";
     p.textContent = "🎉 今日は全部完了！";
     container.append(p);
   }
   for (const task of todo) container.append(homeTaskItem(task, false));
+  for (const task of pendingGrant) container.append(pendingGrantTaskItem(task));
   for (const task of done) container.append(homeTaskItem(task, true));
 }
 
@@ -475,9 +527,10 @@ function homeTaskItem(task, completed) {
   div.className = "task-card" + (completed ? " completed" : "");
   const info = document.createElement("div");
   info.className = "item-main";
+  const pointsLabel = task.createdBy === "child" && task.points === 0 ? "ポイントはあとで決まるよ" : `${task.points}pt`;
   info.innerHTML =
     `<div class="item-title">${escapeHtml(task.title)}</div>` +
-    `<div class="item-sub">${task.points}pt</div>`;
+    `<div class="item-sub">${pointsLabel}</div>`;
   div.append(info);
   const btn = document.createElement("button");
   btn.className = "btn-complete";
@@ -486,9 +539,23 @@ function homeTaskItem(task, completed) {
     btn.disabled = true;
   } else {
     btn.textContent = "やった！";
-    btn.addEventListener("click", () => completeTask(task.id, btn));
+    const handler = task.createdBy === "child" ? markChildTaskDone : completeTask;
+    btn.addEventListener("click", () => handler(task.id, btn));
   }
   div.append(btn);
+  return div;
+}
+
+// ポイント付与待ちのタスクカード（ボタンなし）
+function pendingGrantTaskItem(task) {
+  const div = document.createElement("div");
+  div.className = "task-card completed";
+  const info = document.createElement("div");
+  info.className = "item-main";
+  info.innerHTML =
+    `<div class="item-title">${escapeHtml(task.title)}</div>` +
+    `<div class="item-sub">⏳ ポイント付与待ち</div>`;
+  div.append(info);
   return div;
 }
 
@@ -652,9 +719,12 @@ function renderTasks() {
     item.className = "list-item";
     const main = document.createElement("div");
     main.className = "item-main";
+    const statusNote = task.status === "completed" ? "（完了）"
+      : task.status === "pending_grant" ? "（ポイント付与待ち）" : "";
+    const pointsLabel = task.createdBy === "child" && task.points === 0 ? "未定" : `${task.points}pt`;
     main.innerHTML =
-      `<div class="item-title">${escapeHtml(task.title)}${task.status === "completed" ? "（完了）" : ""}</div>` +
-      `<div class="item-sub">${task.points}pt ・ ${describeRecurrence(task)} ・ 完了${task.completions.length}回</div>`;
+      `<div class="item-title">${escapeHtml(task.title)}${statusNote}</div>` +
+      `<div class="item-sub">${pointsLabel} ・ ${describeRecurrence(task)} ・ 完了${task.completions.length}回</div>`;
     item.append(main);
     const buttons = document.createElement("div");
     buttons.append(smallButton("履歴", () => showTaskHistory(task.id)));
@@ -669,6 +739,44 @@ function renderTasks() {
   }
   if (!rec.children.length) rec.innerHTML = '<p class="empty">なし</p>';
   if (!one.children.length) one.innerHTML = '<p class="empty">なし</p>';
+  renderPendingGrantList();
+}
+
+// タスクタブの「ポイント付与待ち」セクション
+function renderPendingGrantList() {
+  const list = document.getElementById("pending-grant-list");
+  list.innerHTML = "";
+  const pending = state.tasks.filter((t) => t.status === "pending_grant");
+  for (const task of pending) {
+    const div = document.createElement("div");
+    div.className = "list-item";
+    const main = document.createElement("div");
+    main.className = "item-main";
+    main.innerHTML = `<div class="item-title">${escapeHtml(task.title)}</div>`;
+    div.append(main);
+    const controls = document.createElement("div");
+    controls.className = "form-row";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "5";
+    input.step = "5";
+    input.value = "5";
+    const grantBtn = document.createElement("button");
+    grantBtn.className = "btn-primary btn-small";
+    grantBtn.textContent = "付与する";
+    grantBtn.addEventListener("click", () => {
+      const points = Number(input.value);
+      if (!points || points < 1) {
+        alert("ポイント数を入力してください");
+        return;
+      }
+      grantChildTaskPoints(task.id, points, grantBtn);
+    });
+    controls.append(input, grantBtn);
+    div.append(controls);
+    list.append(div);
+  }
+  if (!list.children.length) list.innerHTML = '<p class="empty">なし</p>';
 }
 
 // Task completion history display (Design spec §4)
